@@ -47,11 +47,11 @@ add_executable(ds5-bridge
 )
 
 add_library(wdl_resampler STATIC
-        lib/WDL/resample.cpp
+        lib/WDL/WDL/resample.cpp
 )
 
 target_include_directories(wdl_resampler PUBLIC
-        lib/WDL
+        lib/WDL/WDL
 )
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)
