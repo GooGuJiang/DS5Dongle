@@ -2,7 +2,7 @@
 // Created by awalol on 2026/3/4.
 //
 
-#include "usb.h"
+#include "tusb.h"
 #include "bsp/board_api.h"
 
 uint8_t mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1]; // +1 for master channel 0

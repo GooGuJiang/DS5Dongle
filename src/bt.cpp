@@ -20,12 +20,12 @@
 #include "pico/sync.h"
 #include "classic/sdp_server.h"
 
-static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
+#define MTU 672
 
 static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
-
 static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size);
 
+static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
 static bd_addr_t current_device_addr;
 static bool device_found = false;
 static bool new_pair = false;
@@ -57,8 +57,8 @@ void bt_l2cap_init() {
     l2cap_add_event_handler(&l2cap_event_callback_registration);
     // 修复重连后自动断开的关键点
     sdp_init();
-    l2cap_register_service(l2cap_packet_handler, PSM_HID_CONTROL, 672, LEVEL_2);
-    l2cap_register_service(l2cap_packet_handler, PSM_HID_INTERRUPT, 672, LEVEL_2);
+    l2cap_register_service(l2cap_packet_handler, PSM_HID_CONTROL, MTU, LEVEL_2);
+    l2cap_register_service(l2cap_packet_handler, PSM_HID_INTERRUPT, MTU, LEVEL_2);
 
     l2cap_init();
 }
@@ -68,9 +68,9 @@ int bt_init() {
         printf("Failed to initialize CYW43\n");
         return 1;
     }
-    
+
     critical_section_init(&queue_lock);
-    
+
     bt_l2cap_init();
 
     // SSP (Secure Simple Pairing)
@@ -255,10 +255,10 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                 printf("[L2CAP] Open HID channels\n");
                 if (new_pair) {
                     if (hid_control_cid == 0) {
-                        l2cap_create_channel(l2cap_packet_handler, current_device_addr, PSM_HID_CONTROL, 0xffff,
+                        l2cap_create_channel(l2cap_packet_handler, current_device_addr, PSM_HID_CONTROL, MTU,
                                              &hid_control_cid);
                     } else if (hid_interrupt_cid == 0) {
-                        l2cap_create_channel(l2cap_packet_handler, current_device_addr, PSM_HID_INTERRUPT, 0xffff,
+                        l2cap_create_channel(l2cap_packet_handler, current_device_addr, PSM_HID_INTERRUPT, MTU,
                                              &hid_interrupt_cid);
                     }
                 }
@@ -314,7 +314,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             bt_data_callback(CONTROL, packet, size);
         } else {
             printf("[L2CAP] Data on unknown channel 0x%04X (Interrupt: 0x%04X, Control: 0x%04X)\n",
-                channel, hid_interrupt_cid, hid_control_cid);
+                   channel, hid_interrupt_cid, hid_control_cid);
         }
         return;
     }
@@ -412,7 +412,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             std::vector<uint8_t> data = send_queue.front();
             send_queue.pop();
             critical_section_exit(&queue_lock);
-            
+
             uint8_t status = l2cap_send(hid_interrupt_cid, data.data(), data.size());
             if (status != 0) {
                 printf("[L2CAP] Interrupt Error, Status: 0x%02X\n", status);
@@ -429,11 +429,11 @@ void bt_write(uint8_t *data, uint16_t len) {
     packet[0] = 0xA2;
     memcpy(packet.data() + 1, data, len);
     fill_output_report_checksum(packet.data() + 1, len);
-    
+
     critical_section_enter_blocking(&queue_lock);
     send_queue.push(std::move(packet)); // 使用 std::move 避免深拷贝
     critical_section_exit(&queue_lock);
-    
+
     if (hid_interrupt_cid == 0) {
         printf("[L2CAP bt_write] Warning: hid_interrupt_cid 0");
         return;

@@ -14,6 +14,7 @@
 #define REPORT_SIZE       142
 #define REPORT_ID         0x32
 #define VOLUME_GAIN       2
+#define BUFFER_LENGTH     55
 
 static WDL_Resampler resampler;
 static uint8_t reportSeqCounter = 0;
@@ -23,7 +24,7 @@ void audio_loop() {
     // 1. 读取 USB 音频数据
     if (!tud_audio_available()) return;
 
-    int16_t raw[1024]; // 48000 / 3000 = 16, 64 * 16 = 1024
+    int16_t raw[192]; // 48000 / 3000 = 16, 64 * 16 = 1024
     uint32_t bytes_read = tud_audio_read(raw, sizeof(raw));
     int frames = bytes_read / (INPUT_CHANNELS * sizeof(int16_t));
     if (frames == 0){
@@ -32,16 +33,16 @@ void audio_loop() {
 
     // 2. 从4ch中提取ch3/ch4，转换为float输入重采样器
     WDL_ResampleSample *in_buf;
-    int nsamples = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
+    int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
-    for (int i = 0; i < nsamples; i++) {
+    for (int i = 0; i < nframes; i++) {
         in_buf[i * 2] = (WDL_ResampleSample) raw[i * INPUT_CHANNELS + 2] / 32768.0f;
         in_buf[i * 2 + 1] = (WDL_ResampleSample) raw[i * INPUT_CHANNELS + 3] / 32768.0f;
     }
 
     // 3. 48kHz -> 3kHz 重采样
     WDL_ResampleSample out_buf[SAMPLE_SIZE];  // 64 floats = 32帧 × 2ch
-    int out_frames = resampler.ResampleOut(out_buf, nsamples, SAMPLE_SIZE / OUTPUT_CHANNELS, OUTPUT_CHANNELS);
+    int out_frames = resampler.ResampleOut(out_buf, nframes, SAMPLE_SIZE / OUTPUT_CHANNELS, OUTPUT_CHANNELS);
 
     static int8_t haptic_buf[SAMPLE_SIZE];
     static int haptic_buf_pos = 0;
@@ -63,11 +64,11 @@ void audio_loop() {
         pkt[2] = 0x11 | (1 << 7);
         pkt[3] = 7;
         pkt[4] = 0b11111110;
-        pkt[5] = 0;
-        pkt[6] = 0;
-        pkt[7] = 0;
-        pkt[8] = 0;
-        pkt[9] = 0xFF;
+        pkt[5] = BUFFER_LENGTH;
+        pkt[6] = BUFFER_LENGTH;
+        pkt[7] = BUFFER_LENGTH;
+        pkt[8] = BUFFER_LENGTH;
+        pkt[9] = BUFFER_LENGTH; // buffer length
         pkt[10] = packetCounter++;
         pkt[11] = 0x12 | (1 << 7);
         pkt[12] = SAMPLE_SIZE;

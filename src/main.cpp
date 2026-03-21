@@ -4,7 +4,6 @@
 
 #include <cstdio>
 #include "bsp/board_api.h"
-#include "usb.h"
 #include "bt.h"
 #include "utils.h"
 #include "resample.h"
@@ -27,8 +26,6 @@ uint8_t interrupt_in_data[63] = {
 };
 
 void interrupt_loop() {
-    if (board_millis() - lastTime < 4) return;
-    lastTime = board_millis();
     if (!tud_hid_ready()) return;
     if (!tud_hid_report(0x01, interrupt_in_data, 63)) {
         printf("[USBHID] tud_hid_report error\n");
