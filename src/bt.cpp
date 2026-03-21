@@ -29,12 +29,14 @@ static btstack_packet_callback_registration_t hci_event_callback_registration, l
 static bd_addr_t current_device_addr;
 static bool device_found = false;
 static bool new_pair = false;
+static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
 static bt_data_callback_t bt_data_callback = nullptr;
 std::unordered_map<uint8_t, std::vector<uint8_t> > feature_data;
 static std::queue<std::vector<uint8_t> > send_queue;
 static critical_section_t queue_lock;
+uint32_t inactive_time = 0; // 手柄长时间静默
 
 void bt_register_data_callback(bt_data_callback_t callback) {
     bt_data_callback = callback;
@@ -50,6 +52,16 @@ void bt_send_control(uint8_t *data, uint16_t len) {
     if (hid_control_cid != 0) {
         l2cap_send(hid_control_cid, data, len);
     }
+}
+
+bool bt_disconnect() {
+    if (acl_handle == HCI_CON_HANDLE_INVALID) {
+        return false;
+    }
+
+    // 0x13 = remote user terminated connection
+    hci_send_cmd(&hci_disconnect, acl_handle, 0x13);
+    return true;
 }
 
 void bt_l2cap_init() {
@@ -181,6 +193,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             const uint8_t status = hci_event_connection_complete_get_status(packet);
             if (status == 0) {
                 const hci_con_handle_t handle = hci_event_connection_complete_get_connection_handle(packet);
+                acl_handle = handle;
                 hci_event_connection_complete_get_bd_addr(packet, current_device_addr);
                 printf("[HCI] ACL connected handle=0x%04X\n", handle);
                 printf("[HCI] Request authentication on handle=0x%04X\n", handle);
@@ -285,6 +298,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             const uint8_t reason = hci_event_disconnection_complete_get_reason(packet);
             device_found = false;
             new_pair = false;
+            acl_handle = HCI_CON_HANDLE_INVALID;
             hid_control_cid = 0;
             hid_interrupt_cid = 0;
             feature_data.clear();
@@ -303,6 +317,12 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             // printf("[L2CAP] HID Interrupt data len=%u\n", size);
             // printf_hexdump(packet, size);
             bt_data_callback(INTERRUPT, packet, size);
+            if (packet[3] < 120 || packet[3] > 140) {
+                inactive_time = time_us_32();
+            }else if (time_us_32() - inactive_time > 600 * 1000 * 1000){
+                printf("disconnect when inactive\n");
+                bt_disconnect();
+            }
         } else if (channel == hid_control_cid) {
             if (size > 1 && packet[0] == 0xA3) {
                 uint8_t report_id = packet[1];
@@ -374,7 +394,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 hid_interrupt_cid = 0;
                 device_found = false;
                 printf("[L2CAP] Open failed psm=0x%04X status=0x%02X\n", psm, status);
-                hci_send_cmd(&hci_disconnect);
+                bt_disconnect();
             }
             break;
         }
