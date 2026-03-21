@@ -321,6 +321,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 inactive_time = time_us_32();
             }else if (time_us_32() - inactive_time > 600 * 1000 * 1000){
                 printf("disconnect when inactive\n");
+                inactive_time = time_us_32();
                 bt_disconnect();
             }
         } else if (channel == hid_control_cid) {
