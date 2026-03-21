@@ -5,8 +5,9 @@
 #include "tusb.h"
 #include "bsp/board_api.h"
 
-uint8_t mute[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1]; // +1 for master channel 0
-int16_t volume[CFG_TUD_AUDIO_FUNC_1_N_CHANNELS_RX + 1]; // +1 for master channel 0
+uint8_t mute[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
+int16_t volume[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
+
 #define UAC1_ENTITY_SPK_FEATURE_UNIT    0x02
 #define UAC1_ENTITY_MIC_FEATURE_UNIT    0x05
 
@@ -38,9 +39,10 @@ static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint
     uint8_t channelNum = TU_U16_LOW(p_request->wValue);
     uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
     uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
+    uint8_t index = entityID == UAC1_ENTITY_SPK_FEATURE_UNIT ? 0 : 1;
 
     // If request is for our speaker feature unit
-    if (entityID == UAC1_ENTITY_SPK_FEATURE_UNIT) {
+    if (entityID == UAC1_ENTITY_SPK_FEATURE_UNIT || entityID == UAC1_ENTITY_MIC_FEATURE_UNIT) {
         switch (ctrlSel) {
             case AUDIO10_FU_CTRL_MUTE:
                 switch (p_request->bRequest) {
@@ -48,9 +50,9 @@ static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint
                         // Only 1st form is supported
                         TU_VERIFY(p_request->wLength == 1);
 
-                        mute[channelNum] = pBuff[0];
+                        mute[index] = pBuff[0];
 
-                        TU_LOG2("    Set Mute: %d of channel: %u\r\n", mute[channelNum], channelNum);
+                        TU_LOG2("    Set Mute: %d of entity: %u\r\n", mute[index], entityID);
                         return true;
 
                     default:
@@ -63,9 +65,9 @@ static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint
                         // Only 1st form is supported
                         TU_VERIFY(p_request->wLength == 2);
 
-                        volume[channelNum] = (int16_t) tu_unaligned_read16(pBuff) / 256;
+                        volume[index] = (int16_t) tu_unaligned_read16(pBuff) / 256;
 
-                        TU_LOG2("    Set Volume: %d dB of channel: %u\r\n", volume[channelNum], channelNum);
+                        TU_LOG2("    Set Volume: %d dB of entity: %u\r\n", volume[index], entityID);
                         return true;
 
                     default:
@@ -86,7 +88,7 @@ static bool audio10_get_req_entity(uint8_t rhport, tusb_control_request_t const 
     uint8_t channelNum = TU_U16_LOW(p_request->wValue);
     uint8_t ctrlSel = TU_U16_HIGH(p_request->wValue);
     uint8_t entityID = TU_U16_HIGH(p_request->wIndex);
-    // 当前音量的调节不会影响音量大小，看看后面有没有用再补全吧
+    uint8_t index = entityID == UAC1_ENTITY_SPK_FEATURE_UNIT ? 0 : 1;
 
     // If request is for our speaker feature unit
     if (entityID == UAC1_ENTITY_SPK_FEATURE_UNIT || entityID == UAC1_ENTITY_MIC_FEATURE_UNIT) {
@@ -94,36 +96,35 @@ static bool audio10_get_req_entity(uint8_t rhport, tusb_control_request_t const 
             case AUDIO10_FU_CTRL_MUTE:
                 // Audio control mute cur parameter block consists of only one byte - we thus can send it right away
                 // There does not exist a range parameter block for mute
-                TU_LOG2("    Get Mute of channel: %u\r\n", channelNum);
-                return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &mute[channelNum], 1);
+                TU_LOG2("    Get Mute of entity: %u\r\n", entityID);
+                return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &mute[index], 1);
 
             case AUDIO10_FU_CTRL_VOLUME:
                 switch (p_request->bRequest) {
                     case AUDIO10_CS_REQ_GET_CUR:
-                        TU_LOG2("    Get Volume of channel: %u\r\n", channelNum); {
-                            int16_t vol = (int16_t) volume[channelNum];
+                        TU_LOG2("    Get Volume of entity: %u\r\n", entityID); {
+                            int16_t vol = volume[index];
                             vol = vol * 256; // convert to 1/256 dB units
                             return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &vol, sizeof(vol));
                         }
 
                     case AUDIO10_CS_REQ_GET_MIN:
-                        TU_LOG2("    Get Volume min of channel: %u\r\n", channelNum); {
-                            int16_t min = -100; // -100 dB
+                        TU_LOG2("    Get Volume min of entity: %u\r\n", entityID); {
+                            int16_t min = 1; // 1 dB
                             min = min * 256; // convert to 1/256 dB units
                             return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &min, sizeof(min));
                         }
 
                     case AUDIO10_CS_REQ_GET_MAX:
-                        TU_LOG2("    Get Volume max of channel: %u\r\n", channelNum); {
-                            int16_t max = 0; // 0 dB
+                        TU_LOG2("    Get Volume max of entity: %u\r\n", entityID); {
+                            int16_t max = 2; // 2 dB
                             max = max * 256; // convert to 1/256 dB units
                             return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &max, sizeof(max));
                         }
 
                     case AUDIO10_CS_REQ_GET_RES:
-                        TU_LOG2("    Get Volume res of channel: %u\r\n", channelNum); {
-                            int16_t res = 1; // 1 dB
-                            res = res * 256; // convert to 1/256 dB units
+                        TU_LOG2("    Get Volume res of entity: %u\r\n", entityID); {
+                            int16_t res = 0.1 * 256; // 0.1 dB
                             return tud_audio_buffer_and_schedule_control_xfer(rhport, p_request, &res, sizeof(res));
                         }
                     // Unknown/Unsupported control

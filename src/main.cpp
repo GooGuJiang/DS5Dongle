@@ -12,7 +12,6 @@
 
 int reportSeqCounter = 0;
 uint8_t packetCounter = 0;
-uint32_t lastTime = 0;
 
 uint8_t interrupt_in_data[63] = {
     0x7f, 0x7d, 0x7f, 0x7e, 0x00, 0x00, 0xa7,

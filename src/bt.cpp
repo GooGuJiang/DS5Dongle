@@ -15,6 +15,7 @@
 #include "l2cap.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdio.h"
+#include "usb.h"
 #include "utils.h"
 #include "bsp/board_api.h"
 #include "pico/sync.h"
@@ -28,7 +29,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
 static btstack_packet_callback_registration_t hci_event_callback_registration, l2cap_event_callback_registration;
 static bd_addr_t current_device_addr;
 static bool device_found = false;
-static bool new_pair = false;
+static bool new_pair = false; // 只有新匹配的设备才用创建channel，自动重连走的是service
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
@@ -302,6 +303,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hid_control_cid = 0;
             hid_interrupt_cid = 0;
             feature_data.clear();
+            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
             printf("[HCI] Disconnected reason=0x%02X, start inquiry\n", reason);
             gap_inquiry_start(30);
             break;
@@ -317,7 +319,9 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             // printf("[L2CAP] HID Interrupt data len=%u\n", size);
             // printf_hexdump(packet, size);
             bt_data_callback(INTERRUPT, packet, size);
-            if (packet[3] < 120 || packet[3] > 140) {
+
+            // 静默检测
+            if (!mute[1] && (packet[3] < 120 || packet[3] > 140)) {
                 inactive_time = time_us_32();
             }else if (time_us_32() - inactive_time > 600 * 1000 * 1000){
                 printf("disconnect when inactive\n");
@@ -354,33 +358,34 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("[L2CAP] HID Interrupt opened cid=0x%04X\n", local_cid);
                     hid_interrupt_cid = local_cid;
 
-                    printf("Init DualSense\n");
-                    uint8_t get_feature[41] = {
-                        0x43,
-                        0x05
-                    };
-                    l2cap_send(hid_control_cid, get_feature, 41);
+                    if (!mute[0]) {
+                        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
+                    }
 
+                    printf("Init DualSense\n");
+
+                    init_feature();
+                    // 初始化手柄状态
                     uint8_t report32[142];
                     report32[0] = 0x32;
-                    report32[1] = 0x10;
+                    report32[1] = 0x10; // reportSeqCounter
                     uint8_t packet_0x10[] =
                     {
                         0x90, // Packet: 0x10
                         0x3f, // 63
                         // SetStateData
-                        0xfd, 0xf7, 0x0, 0x0, 0x7f, 0x7f,
+                        0xfd, 0xf7, 0x0, 0x0,
+                        0x7f, 0x7f, // Headphones, Speaker
                         0xff, 0x9, 0x0, 0xf, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                         0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xa,
                         0x7, 0x0, 0x0, 0x2, 0x1,
                         0x00,
-                        0xff, 0xd7, 0x00 // RGB LED: R, G, B
+                        0xff, 0xd7, 0x00 // RGB LED: R, G, B (Nijika Color!)✨
                     };
                     memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
                     bt_write(report32, sizeof(report32));
-                    init_feature();
                 } else {
                     printf("[L2CAP] Unknown Channel psm: 0x%02X", psm);
                 }
