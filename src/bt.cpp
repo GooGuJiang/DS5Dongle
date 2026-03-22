@@ -321,7 +321,10 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             bt_data_callback(INTERRUPT, packet, size);
 
             // 静默检测
-            if (!mute[1] && (packet[3] < 120 || packet[3] > 140)) {
+            if (mute[1]) { // 麦克风静音开启
+                return;
+            }
+            if (packet[3] < 120 || packet[3] > 140) {
                 inactive_time = time_us_32();
             }else if (time_us_32() - inactive_time > 600 * 1000 * 1000){
                 printf("disconnect when inactive\n");
