@@ -15,7 +15,7 @@
 #define REPORT_SIZE       142
 #define REPORT_ID         0x32
 // #define VOLUME_GAIN       2
-#define BUFFER_LENGTH     55
+#define BUFFER_LENGTH     48
 
 static WDL_Resampler resampler;
 static uint8_t reportSeqCounter = 0;

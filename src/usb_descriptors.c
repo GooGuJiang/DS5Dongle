@@ -499,11 +499,9 @@ enum {
 static char const *string_desc_arr[] =
 {
     (const char[]){0x09, 0x04}, // 0: is supported language is English (0x0409)
-    "TinyUSB", // 1: Manufacturer
-    "Wireless Controller", // 2: Product
+    "Sony Interactive Entertainment", // 1: Manufacturer
+    "DualSense Wireless Controller", // 2: Product
     NULL, // 3: Serials will use unique ID if possible
-    "UAC2 Speaker", // 4: Audio Interface
-    "UAC1 Speaker", // 5: UAC1 Audio Interface
 };
 
 static uint16_t _desc_str[60 + 1];
