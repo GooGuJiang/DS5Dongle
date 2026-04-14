@@ -46,7 +46,11 @@ static tusb_desc_device_t const desc_device =
     .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
 
     .idVendor = 0x054C,
+#ifdef ENABLE_DSE
+    .idProduct = 0x0DF2,
+#else
     .idProduct = 0x0CE6,
+#endif
     .bcdDevice = 0x0100,
 
     .iManufacturer = 0x01,
@@ -500,7 +504,11 @@ static char const *string_desc_arr[] =
 {
     (const char[]){0x09, 0x04}, // 0: is supported language is English (0x0409)
     "Sony Interactive Entertainment", // 1: Manufacturer
+#ifdef ENABLE_DSE
+    "DualSense Edge Wireless Controller",
+#else
     "DualSense Wireless Controller", // 2: Product
+#endif
     NULL, // 3: Serials will use unique ID if possible
 };
 

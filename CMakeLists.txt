@@ -56,6 +56,7 @@ target_include_directories(wdl_resampler PUBLIC
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)
 target_compile_options(ds5-bridge PRIVATE -fsigned-char)
+#target_compile_options(ds5-bridge PRIVATE -DENABLE_DSE) # 将PID和产品名称设置为DSE
 target_compile_definitions(ds5-bridge PRIVATE
         CYW43_LWIP=0
         PICO_FLASH_ASSUME_CORE1_SAFE=1
