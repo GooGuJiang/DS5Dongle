@@ -69,12 +69,6 @@ uint8_t const *tud_descriptor_device_cb(void) {
 //--------------------------------------------------------------------+
 // Configuration Descriptor
 //--------------------------------------------------------------------+
-
-
-#define EPNUM_AUDIO       0x01
-
-#define CONFIG_UAC1_TOTAL_LEN    	(TUD_CONFIG_DESC_LEN + TUD_AUDIO10_SPEAKER_STEREO_FB_DESC_LEN(2))
-
 uint8_t const descriptor_configuration[] = {
     // --- CONFIGURATION DESCRIPTOR ---
     0x09, // bLength
@@ -219,8 +213,7 @@ uint8_t const descriptor_configuration[] = {
     0x01, // bEndpointAddress: OUT EP1
     0x09, // bmAttributes: Isochronous, Adaptive
     0x88, 0x01, // wMaxPacketSize: 392 bytes
-    // 0x04, // bInterval: 4 (1/(2^(4-1)) ms ≈ 125 µs/frame)
-    0x01, // bInterval
+    0x01, // bInterval: 1
     0x00, // bRefresh
     0x00, // bSynchAddress
 
@@ -279,7 +272,7 @@ uint8_t const descriptor_configuration[] = {
     0x82, // bEndpointAddress: IN EP2
     0x05, // bmAttributes: Isochronous, Asynchronous
     0xC4, 0x00, // wMaxPacketSize: 196 bytes
-    0x04, // bInterval: 4
+    0x01, // bInterval: 1
     0x00, // bRefresh
     0x00, // bSynchAddress
 
