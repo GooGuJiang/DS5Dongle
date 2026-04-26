@@ -55,7 +55,7 @@ target_include_directories(wdl_resampler PUBLIC
 )
 
 # Opus
-set(OPUS_FIXED_POINT ON)
+#set(OPUS_FIXED_POINT ON)
 add_subdirectory(lib/opus)
 
 target_compile_options(wdl_resampler PRIVATE -fsigned-char)

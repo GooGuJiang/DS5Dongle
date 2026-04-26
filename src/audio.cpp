@@ -30,12 +30,11 @@ alignas(8) static uint32_t audio_core1_stack[8192];
 queue_t audio_fifo;
 queue_t opus_fifo;
 struct audio_raw_element {
-    int16_t data[480 * 2];
+    float data[512 * 2];
 };
 struct opus_element {
     uint8_t data[200];
 };
-
 
 void audio_loop() {
     // 1. 读取 USB 音频数据
@@ -48,18 +47,18 @@ void audio_loop() {
         return;
     }
 
-    static int16_t audio_buf[480 * 2];
+    static float audio_buf[512 * 2];
     static uint audio_buf_pos = 0;
     // 2. 从4ch中提取ch3/ch4，转换为float输入重采样器
     WDL_ResampleSample *in_buf;
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
     for (int i = 0; i < nframes; i++) {
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS];
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1];
-        if (audio_buf_pos == 480 * 2) {
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f;
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f;
+        if (audio_buf_pos == 512 * 2) {
             audio_raw_element element{};
-            memcpy(element.data,audio_buf,480 * 2 * 2);
+            memcpy(element.data,audio_buf,512 * 2 * 4);
             if (queue_is_full(&audio_fifo)){
                 queue_try_remove(&audio_fifo,NULL);
             }
@@ -115,6 +114,8 @@ void audio_loop() {
             }else {
                 memcpy(pkt + 79,opus_element.data,200);
             }
+        }else {
+            printf("[Audio] Warning: opus_fifo is empty\n");
         }
 
         bt_write(pkt, sizeof(pkt));
@@ -133,6 +134,7 @@ void audio_init() {
 }
 
 static OpusEncoder *encoder;
+static WDL_Resampler resampler_audio;
 
 void core1_entry() {
     int error = 0;
@@ -145,12 +147,23 @@ void core1_entry() {
     opus_encoder_ctl(encoder,OPUS_SET_BITRATE(200 * 8 * 100));
     opus_encoder_ctl(encoder,OPUS_SET_VBR(false));
     opus_encoder_ctl(encoder,OPUS_SET_COMPLEXITY(0));
+    resampler_audio.SetMode(true,0,false);
+    resampler_audio.SetRates(51200,48000);
+    resampler_audio.SetFeedMode(true);
 
     while (true) {
         audio_raw_element audio_element{};
         queue_remove_blocking(&audio_fifo,&audio_element);
+        // 将 512 frames 重采样成 480 frames 以解决噪音问题。感谢 @Junhoo
+        WDL_ResampleSample *in_buf;
+        int nframes = resampler_audio.ResamplePrepare(512, 2, &in_buf);
+        for (int i = 0; i < nframes * 2;i++) {
+            in_buf[i] = audio_element.data[i];
+        }
+        WDL_ResampleSample out_buf[200];
+        resampler_audio.ResampleOut(out_buf,nframes,480,2);
         opus_element opus_element{};
-        (void)opus_encode(encoder,audio_element.data,480,opus_element.data,200);
+        (void)opus_encode_float(encoder,out_buf,480,opus_element.data,200);
         if (queue_is_full(&opus_fifo)) {
             queue_try_remove(&opus_fifo,NULL);
         }
