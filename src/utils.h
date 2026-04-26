@@ -3,6 +3,8 @@
 //
 
 #include <cstdint>
+#include <iomanip>
+#include <iostream>
 
 #include "hci_cmd.h"
 
@@ -213,3 +215,10 @@ struct __attribute__((packed)) USBGetStateData { // 63
 /*54.2*/ uint8_t PluggedUnk3 : 6;
 /*55  */ uint8_t AesCmac[8];
 };
+
+inline void print_hex(const int16_t* data,size_t size) {
+    for (int i = 0; i < size; i++) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]) << " ";
+    }
+    std::cout << std::endl;
+}
