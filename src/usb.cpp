@@ -6,7 +6,7 @@
 #include "bsp/board_api.h"
 
 uint8_t mute[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
-int16_t volume[2]; // 0: SPEAKER(0x02) 1: MIC(0x05)
+float volume[2] = {1.0f}; // 0: SPEAKER(0x02) 1: MIC(0x05)
 
 #define UAC1_ENTITY_SPK_FEATURE_UNIT    0x02
 #define UAC1_ENTITY_MIC_FEATURE_UNIT    0x05
@@ -65,7 +65,7 @@ static bool audio10_set_req_entity(tusb_control_request_t const *p_request, uint
                         // Only 1st form is supported
                         TU_VERIFY(p_request->wLength == 2);
 
-                        volume[index] = (int16_t) tu_unaligned_read16(pBuff) / 256;
+                        volume[index] = static_cast<float>(tu_unaligned_read16(pBuff)) / 256;
 
                         TU_LOG2("    Set Volume: %d dB of entity: %u\r\n", volume[index], entityID);
                         return true;

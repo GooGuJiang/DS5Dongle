@@ -35,6 +35,9 @@ void interrupt_loop() {
 void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
     // printf("[Main] BT data callback: channel=%u len=%u\n", channel, len);
     if (channel == INTERRUPT && data[1] == 0x31) {
+        if ((data[56] & 1) != (interrupt_in_data[53] & 1)) {
+            set_headset(data[56] & 1);
+        }
         memcpy(interrupt_in_data, data + 3, 63);
     }
 }

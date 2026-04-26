@@ -26,6 +26,7 @@
 static WDL_Resampler resampler;
 static uint8_t reportSeqCounter = 0;
 static uint8_t packetCounter = 0;
+static bool plug_headset = false;
 alignas(8) static uint32_t audio_core1_stack[8192];
 queue_t audio_fifo;
 queue_t opus_fifo;
@@ -35,6 +36,10 @@ struct audio_raw_element {
 struct opus_element {
     uint8_t data[200];
 };
+
+void set_headset(bool state) {
+    plug_headset = state;
+}
 
 void audio_loop() {
     // 1. 读取 USB 音频数据
@@ -54,8 +59,8 @@ void audio_loop() {
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
     for (int i = 0; i < nframes; i++) {
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f;
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f;
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f * (volume[0] - 1.0f);
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f * (volume[0] - 1.0f);
         if (audio_buf_pos == 512 * 2) {
             audio_raw_element element{};
             memcpy(element.data,audio_buf,512 * 2 * 4);
@@ -81,8 +86,8 @@ void audio_loop() {
 
     // 4. 转换为int8并缓冲，满64字节即组包发送
     for (int i = 0; i < out_frames; i++) {
-        int val_l = (int) (out_buf[i * 2] * 127.0f * (volume[0] ? : 1));
-        int val_r = (int) (out_buf[i * 2 + 1] * 127.0f * (volume[0] ? : 1));
+        int val_l = (int) (out_buf[i * 2] * 127.0f * volume[1]);
+        int val_r = (int) (out_buf[i * 2 + 1] * 127.0f * volume[1]);
         haptic_buf[haptic_buf_pos++] = (int8_t) std::clamp(val_l, -128, 127); // 似乎clamp有点多余？还是以防万一吧
         haptic_buf[haptic_buf_pos++] = (int8_t) std::clamp(val_r, -128, 127);
 
@@ -106,7 +111,10 @@ void audio_loop() {
         pkt[12] = SAMPLE_SIZE;
         memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
         if (!queue_is_empty(&opus_fifo)) {
-            pkt[77] = 0x16 | 0 << 6 | 1 << 7;
+            pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13
+                                              // L Headset Mono: 0x14
+                                              // L Headset R Speaker: 0x15
+                                              // Headset: 0x16
             pkt[78] = 200;
             opus_element opus_element{};
             if (!queue_try_remove(&opus_fifo,&opus_element)) {
