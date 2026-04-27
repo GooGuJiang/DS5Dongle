@@ -62,6 +62,7 @@ target_compile_options(wdl_resampler PRIVATE -fsigned-char)
 target_compile_options(ds5-bridge PRIVATE -fsigned-char)
 target_compile_options(wdl_resampler PRIVATE -DWDL_RESAMPLE_TYPE=float)
 target_compile_options(ds5-bridge PRIVATE -DWDL_RESAMPLE_TYPE=float)
+target_compile_options(ds5-bridge PRIVATE -DCYW43_PIO_CLOCK_DIV_INT=4)
 #target_compile_options(ds5-bridge PRIVATE -DENABLE_DSE) # 将PID和产品名称设置为DSE
 target_compile_definitions(ds5-bridge PRIVATE
         CYW43_LWIP=0
@@ -69,7 +70,7 @@ target_compile_definitions(ds5-bridge PRIVATE
 )
 
 pico_set_program_name(ds5-bridge "ds5-bridge")
-pico_set_program_version(ds5-bridge "0.5.0")
+pico_set_program_version(ds5-bridge "0.5.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(ds5-bridge 1)
