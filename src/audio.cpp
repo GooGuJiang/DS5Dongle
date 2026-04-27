@@ -118,7 +118,7 @@ void audio_loop() {
             pkt[78] = 200;
             opus_element opus_element{};
             if (!queue_try_remove(&opus_fifo,&opus_element)) {
-                printf("[Audio] Warning: opus_fifo try remove failed");
+                printf("[Audio] Warning: opus_fifo try remove failed\n");
             }else {
                 memcpy(pkt + 79,opus_element.data,200);
             }
