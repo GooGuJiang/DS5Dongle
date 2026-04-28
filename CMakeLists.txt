@@ -68,8 +68,13 @@ target_compile_definitions(ds5-bridge PRIVATE
         PICO_FLASH_ASSUME_CORE1_SAFE=1
         WDL_RESAMPLE_TYPE=float
         CYW43_PIO_CLOCK_DIV_INT=4
-#        ENABLE_DSE # 将PID和产品名称设置为DSE
 )
+option(ENABLE_DSE "Enable DSE" OFF)
+if(ENABLE_DSE)
+    target_compile_definitions(ds5-bridge PRIVATE
+            ENABLE_DSE # 将PID和产品名称设置为DSE
+    )
+endif()
 
 pico_set_program_name(ds5-bridge "ds5-bridge")
 pico_set_program_version(ds5-bridge "0.5.2")
