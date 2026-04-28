@@ -333,10 +333,15 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 bt_disconnect();
             }
         } else if (channel == hid_control_cid) {
-            if (size > 1 && packet[0] == 0xA3) {
+            if (packet[0] == 0xA3) {
                 uint8_t report_id = packet[1];
                 feature_data[report_id].assign(packet + 1, packet + size);
                 printf("[L2CAP] Stored Feature Report 0x%02X, len=%u\n", report_id, size - 1);
+            }
+            if (packet[0] == 0x00) {
+                printf("[L2CAP] Getting Test Result\n");
+                feature_data.erase(0x81);
+                get_feature_data(0x81,64);
             }
             printf("[L2CAP] HID Control data len=%u\n", size);
             printf_hexdump(packet, size);
@@ -477,19 +482,33 @@ void bt_write(uint8_t *data, uint16_t len) {
 }
 
 std::vector<uint8_t> get_feature_data(uint8_t reportId, uint16_t len) {
-    if (feature_data.find(reportId) == feature_data.end() || feature_data[reportId].empty()) {
+    if (!feature_data.contains(reportId) || feature_data[reportId].empty()) {
         if (hid_control_cid != 0) {
             uint8_t get_feature[] = {0x43, reportId};
             l2cap_send(hid_control_cid, get_feature, len);
-            printf("[L2CAP] Requesting Feature Report 0x%02X\n", reportId);
+            printf("[L2CAP] Requesting Get Feature Report 0x%02X\n", reportId);
         }
         return {};
     }
     return feature_data[reportId];
 }
 
+void set_feature_data(uint8_t reportId, uint8_t* data,uint16_t len) {
+    if (hid_control_cid != 0) {
+        uint8_t get_feature[len + 2];
+        get_feature[0] = 0x53;
+        get_feature[1] = reportId;
+        memcpy(get_feature + 2,data,len);
+        fill_feature_report_checksum(get_feature + 1,len + 1);
+        l2cap_send(hid_control_cid, get_feature, len + 2);
+        printf("[L2CAP] Requesting Set Feature Report 0x%02X\n", reportId);
+        printf_hexdump(get_feature,len + 2);
+    }
+}
+
 void init_feature() {
     get_feature_data(0x09, 20);
     get_feature_data(0x20, 64);
+    get_feature_data(0x22, 64);
     get_feature_data(0x05, 41);
 }

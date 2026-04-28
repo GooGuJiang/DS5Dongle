@@ -110,6 +110,27 @@ inline void fill_output_report_checksum(uint8_t* outputData,size_t len)
     outputData[len - 1] = (crc >> 24) & 0xFF;
 }
 
+inline uint32_t crc32_feature(const uint8_t *data, std::size_t size) {
+    // https://github.com/rafaelvaloto/Dualsense-Multiplatform/blob/main/Source/Private/GCore/Utils/CR32.cpp
+    uint32_t crc = ~0x2060efc3; // 0x53 seed
+
+    while (size--) {
+        crc ^= *data++;
+        for (unsigned i = 0; i < 8; i++)
+            crc = ((crc >> 1) ^ (0xEDB88320 & -(crc & 1)));
+    }
+
+    return ~crc;
+}
+
+inline void fill_feature_report_checksum(uint8_t *data, const size_t len) {
+    uint32_t crc = crc32_feature(data,len - 4);
+    data[len - 4] = (crc >> 0) & 0xFF;
+    data[len - 3] = (crc >> 8) & 0xFF;
+    data[len - 2] = (crc >> 16) & 0xFF;
+    data[len - 1] = (crc >> 24) & 0xFF;
+}
+
 enum PowerState : uint8_t {
     Discharging         = 0x00, // Use PowerPercent
     Charging            = 0x01, // Use PowerPercent
@@ -216,7 +237,7 @@ struct __attribute__((packed)) USBGetStateData { // 63
 /*55  */ uint8_t AesCmac[8];
 };
 
-inline void print_hex(const int16_t* data,size_t size) {
+inline void print_hex(const uint8_t* data,size_t size) {
     for (int i = 0; i < size; i++) {
         std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]) << " ";
     }

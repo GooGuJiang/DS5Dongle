@@ -72,19 +72,26 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     (void) buffer;
     (void) bufsize;
 
-    switch (buffer[0]) {
-        case 0x02: {
-            uint8_t outputData[78];
-            outputData[0] = 0x31;
-            outputData[1] = reportSeqCounter << 4;
-            if (++reportSeqCounter == 256) {
-                reportSeqCounter = 0;
+    // INTERRUPT OUT
+    if (report_id == 0) {
+        switch (buffer[0]) {
+            case 0x02: {
+                uint8_t outputData[78];
+                outputData[0] = 0x31;
+                outputData[1] = reportSeqCounter << 4;
+                if (++reportSeqCounter == 256) {
+                    reportSeqCounter = 0;
+                }
+                outputData[2] = 0x10;
+                memcpy(outputData + 3, buffer + 1, bufsize - 1);
+                bt_write(outputData, sizeof(outputData));
+                break;
             }
-            outputData[2] = 0x10;
-            memcpy(outputData + 3, buffer + 1, bufsize - 1);
-            bt_write(outputData, sizeof(outputData));
-            break;
         }
+    }
+    if (report_id == 0x80) {
+        set_feature_data(report_id,const_cast<uint8_t *>(buffer),bufsize);
+        return;
     }
 }
 
