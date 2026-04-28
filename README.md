@@ -1,4 +1,5 @@
 # Pico2W DualSense 5 Bridge
+[English](./README.EN.md)
 > 将 Pico2W 变成 DS5 手柄的无线适配器
 
 # 功能特点
