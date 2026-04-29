@@ -63,9 +63,16 @@ jobs:
           cmake --build build/dse --target ds5-bridge
           cp build/dse/ds5-bridge.uf2 artifacts/ds5-bridge-dse.uf2
 
-      - name: Upload UF2 artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload standard UF2 artifact
+        uses: actions/upload-artifact@v7
         with:
-          name: ds5-bridge-uf2
-          path: artifacts/*.uf2
+          path: artifacts/ds5-bridge.uf2
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload DSE UF2 artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts/ds5-bridge-dse.uf2
+          archive: false
           if-no-files-found: error
