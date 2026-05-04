@@ -12,6 +12,8 @@
 #include "hardware/vreg.h"
 #include "hardware/watchdog.h"
 #include "pico/cyw43_arch.h"
+#include "config.h"
+#include "cmd.h"
 
 // Pico SDK speciifically for waiting on conditions
 #include "pico/critical_section.h"
@@ -94,6 +96,10 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
     (void) buffer;
     (void) reqlen;
 
+    if (is_pico_cmd(report_id)) {
+        return pico_cmd_get(report_id,buffer,reqlen);
+    }
+
     std::vector<uint8_t> feature_data = get_feature_data(report_id, reqlen);
     if (!feature_data.empty()) {
         memcpy(buffer, feature_data.data() + 1, feature_data.size() - 1);
@@ -111,6 +117,12 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     (void) report_type;
     (void) buffer;
     (void) bufsize;
+
+    if (is_pico_cmd(report_id)) {
+        printf("[HID] Receive 0xf6 setting config, funcid:0x%02X\n",buffer[0]);
+        pico_cmd_set(report_id,buffer,bufsize);
+        return;
+    }
 
     // INTERRUPT OUT
     if (report_id == 0) {
@@ -172,6 +184,8 @@ int main() {
   
     // Initialize the critical section for the report buffer
     critical_section_init(&report_cs);
+
+    config_load();
 
     bt_init();
     bt_register_data_callback(on_bt_data);

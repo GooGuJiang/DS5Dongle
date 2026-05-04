@@ -6,14 +6,13 @@
 #include "bt.h"
 #include "resample.h"
 #include "tusb.h"
-#include "usb.h"
 #include <algorithm>
 #include <cstdio>
-
 #include "opus.h"
 #include "utils.h"
 #include "pico/multicore.h"
 #include "pico/util/queue.h"
+#include "config.h"
 
 #define INPUT_CHANNELS    4
 #define OUTPUT_CHANNELS   2
@@ -72,8 +71,8 @@ void audio_loop() {
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
     for (int i = 0; i < nframes; i++) {
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f * (volume[0] - 1.0f);
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f * (volume[0] - 1.0f);
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f * (get_config().speaker_volume - 1.0f);
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f * (get_config().speaker_volume - 1.0f);
         if (audio_buf_pos == 512 * 2) {
             static audio_raw_element element{};
             memcpy(element.data,audio_buf,512 * 2 * 4);
@@ -99,8 +98,8 @@ void audio_loop() {
 
     // 4. 转换为int8并缓冲，满64字节即组包发送
     for (int i = 0; i < out_frames; i++) {
-        int val_l = (int) (out_buf[i * 2] * 127.0f * max(volume[1],1.0f));
-        int val_r = (int) (out_buf[i * 2 + 1] * 127.0f * max(volume[1],1.0f));
+        int val_l = (int) (out_buf[i * 2] * 127.0f * max(get_config().haptics_gain,1.0f));
+        int val_r = (int) (out_buf[i * 2 + 1] * 127.0f * max(get_config().haptics_gain,1.0f));
         haptic_buf[haptic_buf_pos++] = (int8_t) clamp(val_l, -128, 127); // 似乎clamp有点多余？还是以防万一吧
         haptic_buf[haptic_buf_pos++] = (int8_t) clamp(val_r, -128, 127);
 

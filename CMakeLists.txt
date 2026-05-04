@@ -44,6 +44,8 @@ add_executable(ds5-bridge
         src/usb.cpp
         src/audio.cpp
         src/bt.cpp
+        src/config.cpp
+        src/cmd.cpp
 )
 
 # Cockos WDLResampler
@@ -67,7 +69,7 @@ target_compile_definitions(ds5-bridge PRIVATE
         CYW43_LWIP=0
         PICO_FLASH_ASSUME_CORE1_SAFE=1
         WDL_RESAMPLE_TYPE=float
-        CYW43_PIO_CLOCK_DIV_INT=4
+        CYW43_PIO_CLOCK_DIV_INT=5
 )
 option(ENABLE_DSE "Enable DSE" OFF)
 if(ENABLE_DSE)
@@ -98,6 +100,7 @@ target_link_libraries(ds5-bridge
         pico_multicore
         hardware_watchdog
         hardware_timer
+        hardware_flash
         pico_btstack_classic
 #        pico_cyw43_arch_threadsafe_background
         pico_cyw43_arch_poll

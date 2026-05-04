@@ -4,13 +4,10 @@
 
 #include <cstdio>
 #include <cstring>
-
 #include "bt.h"
-
 #include <queue>
 #include <unordered_map>
 #include <vector>
-
 #include "btstack_event.h"
 #include "l2cap.h"
 #include "pico/cyw43_arch.h"
@@ -20,6 +17,7 @@
 #include "bsp/board_api.h"
 #include "pico/sync.h"
 #include "classic/sdp_server.h"
+#include "config.h"
 
 #define MTU 672
 
@@ -321,7 +319,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             bt_data_callback(INTERRUPT, packet, size);
 
             // 静默检测
-            if (mute[1]) { // 麦克风静音开启
+            if (get_config().disable_inactive_disconnect) {
                 return;
             }
             if (packet[3] < 120 || packet[3] > 140) {
@@ -361,7 +359,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     printf("[L2CAP] HID Interrupt opened cid=0x%04X\n", local_cid);
                     hid_interrupt_cid = local_cid;
 
-                    if (!mute[0]) {
+                    if (!get_config().disable_pico_led) {
                         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
                     }
                     inactive_time = time_us_32();

@@ -303,9 +303,9 @@ uint8_t const descriptor_configuration[] = {
     0x01, // bNumDescriptors: 1 report descriptor
     0x22, // bDescriptorType: Report
 #ifdef ENABLE_DSE
-    0x95, 0x01, // wDescriptorLength: 405 (0x0121)
+    0xA1, 0x01, // wDescriptorLength: 417 (0x01A1)
 #else
-    0x21, 0x01, // wDescriptorLength: 289 (0x0121)
+    0x31, 0x01, // wDescriptorLength: 289 (0x0121)
 #endif
 
     // Endpoint Descriptor (HID IN: EP4)
@@ -480,6 +480,14 @@ uint8_t const desc_hid_report_ds[] = {
     0x09, 0x36, //   Usage (0x36)
     0x95, 0x03, //   Report Count (3)
     0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+    0x85, 0xF6,
+    0x09, 0x37,
+    0x95, 0x3F,
+    0xB1, 0x02,
+    0x85, 0xF7,
+    0x09, 0x38,
+    0x95, 0x3F,
+    0xB1, 0x02,
     0xC0, // End Collection
     // 289 bytes
 };
@@ -686,8 +694,16 @@ uint8_t const desc_hid_report_dse[] = {
     0x85, 0x7B, //   Report ID (123)
     0x09, 0x53, //   Usage (0x53)
     0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
+    0x85, 0xF6,
+    0x09, 0x37,
+    0x95, 0x3F,
+    0xB1, 0x02,
+    0x85, 0xF7,
+    0x09, 0x38,
+    0x95, 0x3F,
+    0xB1, 0x02,
     0xC0, // End Collection
-    // 405 bytes
+    // 417 bytes
 };
 #endif
 
