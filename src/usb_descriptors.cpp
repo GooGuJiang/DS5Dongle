@@ -27,10 +27,14 @@
 #include "tusb.h"
 #include "config.h"
 
+bool ds_mode() {
+    return get_config().controller_mode == 0;
+}
+
 //--------------------------------------------------------------------+
 // Device Descriptors
 //--------------------------------------------------------------------+
-static tusb_desc_device_t const desc_device =
+tusb_desc_device_t desc_device =
 {
     .bLength = sizeof(tusb_desc_device_t),
     .bDescriptorType = TUSB_DESC_DEVICE,
@@ -47,11 +51,8 @@ static tusb_desc_device_t const desc_device =
     .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
 
     .idVendor = 0x054C,
-#ifdef ENABLE_DSE
-    .idProduct = 0x0DF2,
-#else
-    .idProduct = 0x0CE6,
-#endif
+    // .idProduct = 0x0CE6, // DS
+    // .idProduct = 0x0DF2, // DSE
     .bcdDevice = 0x0100,
 
     .iManufacturer = 0x01,
@@ -64,7 +65,8 @@ static tusb_desc_device_t const desc_device =
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
 uint8_t const *tud_descriptor_device_cb(void) {
-    return (uint8_t const *) &desc_device;
+    desc_device.idProduct = ds_mode() ? 0x0CE6 : 0x0DF2;
+    return reinterpret_cast<uint8_t const *>(&desc_device);
 }
 
 //--------------------------------------------------------------------+
@@ -303,11 +305,8 @@ uint8_t descriptor_configuration[] = {
     0x00, // bCountryCode: Not localized
     0x01, // bNumDescriptors: 1 report descriptor
     0x22, // bDescriptorType: Report
-#ifdef ENABLE_DSE
-    0xA1, 0x01, // wDescriptorLength: 417 (0x01A1)
-#else
-    0x31, 0x01, // wDescriptorLength: 289 (0x0121)
-#endif
+    0x31, 0x01, // wDescriptorLength: 305 (0x0131) DS
+    // 0xA5, 0x01, // wDescriptorLength: 421 (0x01A5) DSE
 
     // Endpoint Descriptor (HID IN: EP4)
     0x07, // bLength
@@ -343,8 +342,14 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
             bInterval = 0x01;
             break;
     }
-    descriptor_configuration[sizeof(descriptor_configuration) - 1] = bInterval;
-    descriptor_configuration[sizeof(descriptor_configuration) - 8] = bInterval;
+    constexpr auto offset = sizeof(descriptor_configuration);
+    descriptor_configuration[offset - 1] = bInterval;
+    descriptor_configuration[offset - 8] = bInterval;
+    if (ds_mode()) {
+        descriptor_configuration[offset - 16] = 0x31;
+    }else {
+        descriptor_configuration[offset - 16] = 0xA5;
+    }
     return descriptor_configuration;
 }
 
@@ -352,7 +357,6 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 // HID Report Descriptor
 //--------------------------------------------------------------------+
 
-#ifndef ENABLE_DSE
 uint8_t const desc_hid_report_ds[] = {
     0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
     0x09, 0x05, // Usage (Game Pad)
@@ -504,11 +508,9 @@ uint8_t const desc_hid_report_ds[] = {
     0x95, 0x3F,
     0xB1, 0x02,
     0xC0, // End Collection
-    // 289 bytes
+    // 305 bytes
 };
-#endif
 
-#ifdef ENABLE_DSE
 uint8_t const desc_hid_report_dse[] = {
     0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
     0x09, 0x05, // Usage (Game Pad)
@@ -718,20 +720,18 @@ uint8_t const desc_hid_report_dse[] = {
     0x95, 0x3F,
     0xB1, 0x02,
     0xC0, // End Collection
-    // 417 bytes
+    // 421 bytes
 };
-#endif
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
     (void) itf;
-#ifdef ENABLE_DSE
+    if (ds_mode()) {
+        return desc_hid_report_ds;
+    }
     return desc_hid_report_dse;
-#else
-    return desc_hid_report_ds;
-#endif
 }
 
 //--------------------------------------------------------------------+
@@ -751,11 +751,7 @@ static char const *string_desc_arr[] =
 {
     (const char[]){0x09, 0x04}, // 0: is supported language is English (0x0409)
     "Sony Interactive Entertainment", // 1: Manufacturer
-#ifdef ENABLE_DSE
-    "DualSense Edge Wireless Controller",
-#else
-    "DualSense Wireless Controller", // 2: Product
-#endif
+    NULL, // 2: Product
     NULL, // 3: Serials will use unique ID if possible
 };
 
@@ -766,6 +762,12 @@ static uint16_t _desc_str[60 + 1];
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     (void) langid;
     size_t chr_count;
+
+    if (ds_mode()) {
+        string_desc_arr[2] = "DualSense Wireless Controller";
+    }else {
+        string_desc_arr[2] = "DualSense Edge Wireless Controller";
+    }
 
     switch (index) {
         case STRID_LANGID:

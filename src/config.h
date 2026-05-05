@@ -14,6 +14,7 @@ struct __attribute__((packed)) Config_body {
     uint8_t disable_pico_led; // bool
     uint8_t polling_rate_mode; // 0: 250Hz,1: 500Hz,2: instant
     uint8_t haptics_buffer_length; // [16,255]
+    uint8_t controller_mode; // 0: DS5, 1: DSE
 };
 
 struct __attribute__((packed)) Config {

@@ -11,8 +11,6 @@
 #include "btstack_event.h"
 #include "l2cap.h"
 #include "pico/cyw43_arch.h"
-#include "pico/stdio.h"
-#include "usb.h"
 #include "utils.h"
 #include "bsp/board_api.h"
 #include "pico/sync.h"
