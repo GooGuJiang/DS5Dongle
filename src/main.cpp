@@ -38,6 +38,14 @@ volatile bool report_dirty = false;
 void interrupt_loop() {
     if (!tud_hid_ready()) return;
 
+    // TODO: Refactor for better code reuse
+    if (get_config().polling_rate_mode != 2) {
+        if (!tud_hid_report(0x01, interrupt_in_data, 63)) {
+            printf("[USBHID] tud_hid_report error\n");
+        }
+        return;
+    }
+
     bool should_send = false;
     // Local buffer to hold the report data while we prepare it to send. 
     uint8_t safe_report[63];
@@ -70,6 +78,11 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
     if (channel == INTERRUPT && data[1] == 0x31) {
         if ((data[56] & 1) != (interrupt_in_data[53] & 1)) {
             set_headset(data[56] & 1);
+        }
+
+        if (get_config().polling_rate_mode != 2) {
+            memcpy(interrupt_in_data, data + 3, 63);
+            return;
         }
 
         // We add the critical section here to avoid any race conditions when writing to the interrupt_in_data buffer,

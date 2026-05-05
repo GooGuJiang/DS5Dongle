@@ -25,6 +25,7 @@
 
 #include "bsp/board_api.h"
 #include "tusb.h"
+#include "config.h"
 
 //--------------------------------------------------------------------+
 // Device Descriptors
@@ -69,7 +70,7 @@ uint8_t const *tud_descriptor_device_cb(void) {
 //--------------------------------------------------------------------+
 // Configuration Descriptor
 //--------------------------------------------------------------------+
-uint8_t const descriptor_configuration[] = {
+uint8_t descriptor_configuration[] = {
     // --- CONFIGURATION DESCRIPTOR ---
     0x09, // bLength
     0x02, // bDescriptorType (CONFIGURATION)
@@ -330,6 +331,20 @@ uint8_t const descriptor_configuration[] = {
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     (void) index; // for multiple configurations
+    auto bInterval = 0x01;
+    switch (get_config().polling_rate_mode) {
+        case 0:
+            bInterval = 0x04;
+            break;
+        case 1:
+            bInterval = 0x02;
+            break;
+        case 2:
+            bInterval = 0x01;
+            break;
+    }
+    descriptor_configuration[sizeof(descriptor_configuration) - 1] = bInterval;
+    descriptor_configuration[sizeof(descriptor_configuration) - 8] = bInterval;
     return descriptor_configuration;
 }
 

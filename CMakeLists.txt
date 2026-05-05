@@ -39,7 +39,7 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(ds5-bridge
-        src/usb_descriptors.c
+        src/usb_descriptors.cpp
         src/main.cpp
         src/usb.cpp
         src/audio.cpp
