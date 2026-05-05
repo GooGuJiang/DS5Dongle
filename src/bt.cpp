@@ -487,7 +487,7 @@ vector<uint8_t> get_feature_data(uint8_t reportId, uint16_t len) {
     if (!feature_data.contains(reportId) || reportId == 0x81) {
         if (hid_control_cid != 0) {
             uint8_t get_feature[] = {0x43, reportId};
-            l2cap_send(hid_control_cid, get_feature, len);
+            l2cap_send(hid_control_cid, get_feature, sizeof(get_feature));
             printf("[L2CAP] Requesting Get Feature Report 0x%02X\n", reportId);
         }
     }
