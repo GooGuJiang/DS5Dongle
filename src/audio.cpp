@@ -31,28 +31,16 @@ static uint8_t packetCounter = 0;
 static bool plug_headset = false;
 alignas(8) static uint32_t audio_core1_stack[8192];
 queue_t audio_fifo;
-queue_t opus_fifo;
+static uint8_t opus_buf[200];
+critical_section_t opus_cs;
 struct audio_raw_element {
     float data[512 * 2];
-};
-struct opus_element {
-    uint8_t data[200];
 };
 
 void set_headset(bool state) {
     plug_headset = state;
 }
 
-// 有一个重构的想法，就是也把haptics也放进队列里面，使用定时器来发送数据
-// 定时器伪代码:
-// static uint8_t haptics_buf[64];
-// static uint8_t speaker_buf[200];
-// static auto last = time_us32();
-// auto now = time_us32();
-// if(now - last < 10666) return;
-// func: send haptics and speaker;
-// try_queue_remove - haptics and speaker
-// 缺点是可能会导致haptics有延迟，不够实时？
 void audio_loop() {
     // 1. 读取 USB 音频数据
     if (!tud_audio_available()) return;
@@ -91,7 +79,7 @@ void audio_loop() {
 
     // 3. 48kHz -> 3kHz 重采样
     static WDL_ResampleSample out_buf[SAMPLE_SIZE]; // 64 floats = 32帧 × 2ch
-    int out_frames = resampler.ResampleOut(out_buf, nframes, SAMPLE_SIZE / OUTPUT_CHANNELS, OUTPUT_CHANNELS);
+    const int out_frames = resampler.ResampleOut(out_buf, nframes, nframes / 4, OUTPUT_CHANNELS);
 
     static int8_t haptic_buf[SAMPLE_SIZE];
     static int haptic_buf_pos = 0;
@@ -123,17 +111,11 @@ void audio_loop() {
         pkt[11] = 0x12 | (1 << 7);
         pkt[12] = SAMPLE_SIZE;
         memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
-        static opus_element opus_packet{};
-        if (queue_try_remove(&opus_fifo,&opus_packet)) {
-            pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13
-            // L Headset Mono: 0x14
-            // L Headset R Speaker: 0x15
-            // Headset: 0x16
-            pkt[78] = 200;
-            memcpy(pkt + 79,opus_packet.data,200);
-        }else {
-            printf("[Audio] Warning: opus_fifo try remove failed\n");
-        }
+        pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13
+        pkt[78] = 200;
+        critical_section_enter_blocking(&opus_cs);
+        memcpy(pkt + 79,opus_buf,200);
+        critical_section_exit(&opus_cs);
 
         bt_write(pkt, sizeof(pkt));
         haptic_buf_pos = 0;
@@ -144,9 +126,9 @@ void audio_init() {
     resampler.SetMode(true, 0, false);
     resampler.SetRates(48000, 3000);
     resampler.SetFeedMode(true);
-    // resampler.Prealloc(2, 480, 32);
+    resampler.Prealloc(2, 24, 6);
     queue_init(&audio_fifo,sizeof(audio_raw_element),2);
-    queue_init(&opus_fifo,sizeof(opus_element),2);
+    critical_section_init(&opus_cs);
     multicore_launch_core1_with_stack(core1_entry,audio_core1_stack,sizeof(audio_core1_stack));
 }
 
@@ -167,6 +149,7 @@ void core1_entry() {
     resampler_audio.SetMode(true,0,false);
     resampler_audio.SetRates(51200,48000);
     resampler_audio.SetFeedMode(true);
+    resampler_audio.Prealloc(2, 512, 480);
 
     while (true) {
         static audio_raw_element audio_element{};
@@ -179,13 +162,11 @@ void core1_entry() {
         }
         static WDL_ResampleSample out_buf[480 * 2];
         resampler_audio.ResampleOut(out_buf,nframes,480,2);
-        static opus_element opus_packet{};
-        (void)opus_encode_float(encoder,out_buf,480,opus_packet.data,200);
-        if (queue_is_full(&opus_fifo)) {
-            queue_try_remove(&opus_fifo,NULL);
-        }
-        if (!queue_try_add(&opus_fifo,&opus_packet)) {
-            printf("[Audio] Warning: opus_fifo add failed\n");
-        }
+
+        static uint8_t out[200];
+        (void)opus_encode_float(encoder,out_buf,480,out,200);
+        critical_section_enter_blocking(&opus_cs);
+        memcpy(opus_buf,out,200);
+        critical_section_exit(&opus_cs);
     }
 }
