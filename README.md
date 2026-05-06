@@ -87,7 +87,7 @@ To build the project from source:
 
 ## Community
 - Join the Discord server: [Discord Server](https://discord.gg/hM4ntchGCa)
-- If you have a bug or feature request, please open an issue instead.
+- If you have a bug, please open an issue instead.
 
 ## References
 
