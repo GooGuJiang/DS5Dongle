@@ -85,6 +85,10 @@ To build the project from source:
 ## Roadmap
 - Please check out [DS5Dongle plan](https://github.com/users/awalol/projects/5)
 
+## Community
+- Join the Discord server: [Discord Server](https://discord.gg/hM4ntchGCa)
+- If you have a bug or feature request, please open an issue instead.
+
 ## References
 
 - [rafaelvaloto/Pico_W-Dualsense](https://github.com/rafaelvaloto/Pico_W-Dualsense) — Project inspiration
