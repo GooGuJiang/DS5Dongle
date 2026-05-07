@@ -54,7 +54,7 @@ void config_valid() {
         body->speaker_volume = 2.0f;
         printf("[Config] Speaker Volume is invalid\n");
     }
-    if (body->inactive_time < 10 || body->inactive_time > 60) {
+    if (body->inactive_time < 5 || body->inactive_time > 60) {
         body->inactive_time = 30;
         printf("[Config] Inactive time is invalid\n");
     }
@@ -70,8 +70,8 @@ void config_valid() {
         body->polling_rate_mode = 0;
         printf("[Config] polling_rate_mode is invalid\n");
     }
-    if (body->haptics_buffer_length < 16 || body->haptics_buffer_length > 255) {
-        body->haptics_buffer_length = 48;
+    if (body->haptics_buffer_length < 16 || body->haptics_buffer_length > 128) {
+        body->haptics_buffer_length = 64;
         printf("[Config] haptics_buffer_length is invalid\n");
     }
     if (body->controller_mode > 1) {
