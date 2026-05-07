@@ -36,6 +36,7 @@ static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hid_control_cid;
 static uint16_t hid_interrupt_cid;
 static bt_data_callback_t bt_data_callback = nullptr;
+static bool check_dse = false;
 unordered_map<uint8_t, vector<uint8_t> > feature_data;
 queue_t send_fifo;
 
@@ -337,6 +338,15 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 bt_disconnect();
             }
         } else if (channel == hid_control_cid) {
+            if (check_dse) {
+                check_dse = false;
+                if (packet[0] == 0x02) {
+                    is_dse = false;
+                }else if (size > 1){
+                    is_dse = true;
+                }
+                tud_connect();
+            }
             if (packet[0] == 0xA3) {
                 uint8_t report_id = packet[1];
                 feature_data[report_id].assign(packet + 1, packet + size);
@@ -396,7 +406,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                     memcpy(report32 + 2, packet_0x10, sizeof(packet_0x10));
                     bt_write(report32, sizeof(report32));
 
-                    tud_connect();
+                    // tud_connect();
                 } else {
                     printf("[L2CAP] Unknown Channel psm: 0x%02X", psm);
                 }
@@ -518,4 +528,9 @@ void init_feature() {
     get_feature_data(0x20, 64);
     get_feature_data(0x22, 64);
     get_feature_data(0x05, 41);
+    // DSE
+    // check DSE by request 0x70 feature report. DSE return DEFAULT
+    // If len == 1, it's DS5
+    check_dse = true;
+    get_feature_data(0x70, 64);
 }

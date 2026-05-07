@@ -28,6 +28,9 @@
 #include "config.h"
 
 bool ds_mode() {
+    if (get_config().controller_mode == 2) {
+        return !is_dse;
+    }
     return get_config().controller_mode == 0;
 }
 
