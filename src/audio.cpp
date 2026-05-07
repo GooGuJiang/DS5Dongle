@@ -7,6 +7,7 @@
 #include "resample.h"
 #include "tusb.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include "opus.h"
 #include "utils.h"
@@ -59,9 +60,10 @@ void audio_loop() {
     WDL_ResampleSample *in_buf;
     int nframes = resampler.ResamplePrepare(frames, OUTPUT_CHANNELS, &in_buf);
 
+    float gain = mute[0] ? 0.0f : powf(10.0f, get_config().speaker_volume / 20.0f);
     for (int i = 0; i < nframes; i++) {
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f * (get_config().speaker_volume - 1.0f) * !mute[0];
-        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f * (get_config().speaker_volume - 1.0f) * !mute[0];
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS] / 32768.0f * gain;
+        audio_buf[audio_buf_pos++] = raw[i * INPUT_CHANNELS + 1] / 32768.0f * gain;
         if (audio_buf_pos == 512 * 2) {
             static audio_raw_element element{};
             memcpy(element.data,audio_buf,512 * 2 * 4);

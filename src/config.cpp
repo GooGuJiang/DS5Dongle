@@ -50,8 +50,8 @@ void config_valid() {
         body->haptics_gain = 1.0f;
         printf("[Config] Haptics Gain value is invalid\n");
     }
-    if (std::isnan(body->speaker_volume) || body->speaker_volume < 1.0f || body->speaker_volume > 2.0f) {
-        body->speaker_volume = 2.0f;
+    if (std::isnan(body->speaker_volume) || body->speaker_volume < -100 || body->speaker_volume > 0) {
+        body->speaker_volume = -100;
         printf("[Config] Speaker Volume is invalid\n");
     }
     if (body->inactive_time < 5 || body->inactive_time > 60) {
