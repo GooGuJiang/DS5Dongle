@@ -122,3 +122,8 @@ void set_config(const uint8_t *new_config, const uint16_t len) {
         cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
     }
 }
+
+void set_config(const Config_body &new_config) {
+    config.body = new_config;
+    config_valid();
+}
