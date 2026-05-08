@@ -341,15 +341,21 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             }
         } else if (channel == hid_control_cid) {
             if (check_dse) {
-                check_dse = false;
-                if (packet[0] == 0x02) {
-                    is_dse = false;
-                }else if (size > 1){
+                if (packet[0] == 0xA3 && packet[1] == 0x70) {
+                    printf("Connected DSE Controller\n");
+                    check_dse = false;
                     is_dse = true;
-                }
 #if !ENABLE_SERIAL
-                tud_connect();
+                    tud_connect();
 #endif
+                }else if (packet[0] == 0x02) {
+                    printf("Connected DS5 Controller\n");
+                    check_dse = false;
+                    is_dse = false;
+#if !ENABLE_SERIAL
+                    tud_connect();
+#endif
+                }
             }
             if (packet[0] == 0xA3) {
                 uint8_t report_id = packet[1];

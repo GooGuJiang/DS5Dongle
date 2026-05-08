@@ -16,6 +16,7 @@ constexpr uint32_t CONFIG_MAGIC = 0x66ccff00;
 constexpr uint16_t CONFIG_VERSION = 1;
 constexpr uint32_t CONFIG_FLASH_OFFSET = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 static Config config{};
+bool is_dse = false;
 
 // 编译期保护
 // 判断Config结构体是否能放进flash 256bytes
