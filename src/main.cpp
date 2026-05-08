@@ -12,6 +12,9 @@
 #include "hardware/vreg.h"
 #include "hardware/watchdog.h"
 #include "pico/cyw43_arch.h"
+#if ENABLE_SERIAL
+#include "pico/stdio_usb.h"
+#endif
 #include "config.h"
 #include "cmd.h"
 
@@ -175,8 +178,13 @@ int main() {
         .speed = TUSB_SPEED_FULL
     };
     tusb_init(BOARD_TUD_RHPORT, &dev_init);
+#ifndef ENABLE_SERIAL
     tud_disconnect();
+#endif
     board_init_after_tusb();
+#if ENABLE_SERIAL
+    stdio_usb_init();
+#endif
 
     if (cyw43_arch_init()) {
         printf("Failed to initialize CYW43\n");

@@ -27,12 +27,51 @@
 #include "tusb.h"
 #include "config.h"
 
+#ifndef ENABLE_SERIAL
+#define ENABLE_SERIAL 0
+#endif
+
 bool ds_mode() {
     if (get_config().controller_mode == 2) {
         return !is_dse;
     }
     return get_config().controller_mode == 0;
 }
+
+enum {
+    ITF_NUM_AUDIO_CONTROL = 0,
+    ITF_NUM_AUDIO_STREAMING_OUT,
+    ITF_NUM_AUDIO_STREAMING_IN,
+    ITF_NUM_HID,
+#if ENABLE_SERIAL
+    ITF_NUM_CDC,
+    ITF_NUM_CDC_DATA,
+#endif
+    ITF_NUM_TOTAL,
+
+    CONFIG_DESC_LEN_AUDIO_IAD =
+#if ENABLE_SERIAL
+        8,
+#else
+        0,
+#endif
+    CONFIG_DESC_LEN_BASE = 0x00E3 + CONFIG_DESC_LEN_AUDIO_IAD,
+    CONFIG_DESC_LEN_TOTAL = CONFIG_DESC_LEN_BASE
+#if ENABLE_SERIAL
+        + TUD_CDC_DESC_LEN
+#endif
+};
+
+// String Descriptor Index
+enum {
+    STRID_LANGID = 0,
+    STRID_MANUFACTURER,
+    STRID_PRODUCT,
+    STRID_SERIAL,
+#if ENABLE_SERIAL
+    STRID_CDC,
+#endif
+};
 
 //--------------------------------------------------------------------+
 // Device Descriptors
@@ -45,12 +84,15 @@ tusb_desc_device_t desc_device =
 
     // Use Interface Association Descriptor (IAD) for Audio
     // As required by USB Specs IAD's subclass must be common class (2) and protocol must be IAD (1)
-    /*.bDeviceClass = TUSB_CLASS_MISC,
+#if ENABLE_SERIAL
+    .bDeviceClass = TUSB_CLASS_MISC,
     .bDeviceSubClass = MISC_SUBCLASS_COMMON,
-    .bDeviceProtocol = MISC_PROTOCOL_IAD,*/
+    .bDeviceProtocol = MISC_PROTOCOL_IAD,
+#else
     .bDeviceClass = 0x00,
     .bDeviceSubClass = 0x00,
     .bDeviceProtocol = 0x00,
+#endif
     .bMaxPacketSize0 = CFG_TUD_ENDPOINT0_SIZE,
 
     .idVendor = 0x054C,
@@ -79,13 +121,25 @@ uint8_t descriptor_configuration[] = {
     // --- CONFIGURATION DESCRIPTOR ---
     0x09, // bLength
     0x02, // bDescriptorType (CONFIGURATION)
-    0xE3, 0x00, // wTotalLength: 227
-    0x04, // bNumInterfaces: 4
+    U16_TO_U8S_LE(CONFIG_DESC_LEN_TOTAL), // wTotalLength
+    ITF_NUM_TOTAL, // bNumInterfaces
     0x01, // bConfigurationValue: 1
     0x00, // iConfiguration: 0
     0xC0, // bmAttributes: SELF-POWERED, NO REMOTE-WAKEUP
     0xFA, // bMaxPower: 500mA (250 * 2mA)
 
+#if ENABLE_SERIAL
+    // --- INTERFACE ASSOCIATION DESCRIPTOR: Audio function (interfaces 0-2) ---
+    0x08, // bLength
+    TUSB_DESC_INTERFACE_ASSOCIATION, // bDescriptorType
+    ITF_NUM_AUDIO_CONTROL, // bFirstInterface
+    0x03, // bInterfaceCount
+    0x01, // bFunctionClass: Audio
+    0x01, // bFunctionSubClass: Audio Control
+    0x00, // bFunctionProtocol
+    0x00, // iFunction
+
+#endif
     // --- INTERFACE DESCRIPTOR (0.0): Audio Control ---
     0x09, // bLength
     0x04, // bDescriptorType (INTERFACE)
@@ -326,6 +380,11 @@ uint8_t descriptor_configuration[] = {
     0x03, // bmAttributes: Interrupt
     0x40, 0x00, // wMaxPacketSize: 64
     0x01, // bInterval: 1 (polling every 4ms -> 1ms)
+
+#if ENABLE_SERIAL
+    // --- CDC ACM (USB Serial) ---
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, STRID_CDC, 0x85, 0x08, 0x06, 0x86, 0x40),
+#endif
 };
 
 // Invoked when received GET CONFIGURATION DESCRIPTOR
@@ -345,7 +404,7 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
             bInterval = 0x01;
             break;
     }
-    constexpr auto offset = sizeof(descriptor_configuration);
+    constexpr auto offset = CONFIG_DESC_LEN_BASE;
     descriptor_configuration[offset - 1] = bInterval;
     descriptor_configuration[offset - 8] = bInterval;
     if (ds_mode()) {
@@ -741,14 +800,6 @@ uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
 // String Descriptors
 //--------------------------------------------------------------------+
 
-// String Descriptor Index
-enum {
-    STRID_LANGID = 0,
-    STRID_MANUFACTURER,
-    STRID_PRODUCT,
-    STRID_SERIAL,
-};
-
 // array of pointer to string descriptors
 static char const *string_desc_arr[] =
 {
@@ -756,6 +807,9 @@ static char const *string_desc_arr[] =
     "Sony Interactive Entertainment", // 1: Manufacturer
     NULL, // 2: Product
     NULL, // 3: Serials will use unique ID if possible
+#if ENABLE_SERIAL
+    "USB Serial", // 4: CDC interface
+#endif
 };
 
 static uint16_t _desc_str[60 + 1];

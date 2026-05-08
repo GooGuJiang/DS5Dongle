@@ -30,6 +30,10 @@
  extern "C" {
 #endif
 
+#ifndef ENABLE_SERIAL
+#define ENABLE_SERIAL 0
+#endif
+
 //--------------------------------------------------------------------+
 // Board Specific Configuration
 //--------------------------------------------------------------------+
@@ -93,7 +97,7 @@
 //------------- CLASS -------------//
 #define CFG_TUD_AUDIO             1
 #define CFG_TUD_HID               1
-#define CFG_TUD_CDC               1
+#define CFG_TUD_CDC               ENABLE_SERIAL
 #define CFG_TUD_MSC               0
 #define CFG_TUD_MIDI              0
 #define CFG_TUD_VENDOR            0

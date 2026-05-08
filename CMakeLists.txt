@@ -28,6 +28,13 @@ set(PICO_BOARD pico2_w CACHE STRING "Board type")
 #set(PICO_CYW43_SUPPORTED 1)
 #set(PICO_CYW43_ARCH_THREADSAFE_BACKGROUND 1)
 
+option(ENABLE_SERIAL "Enable USB CDC serial printf output" OFF)
+if (ENABLE_SERIAL)
+        set(ENABLE_SERIAL_VALUE 1)
+else ()
+        set(ENABLE_SERIAL_VALUE 0)
+endif ()
+
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
@@ -67,9 +74,13 @@ target_compile_definitions(wdl_resampler PRIVATE
 )
 target_compile_definitions(ds5-bridge PRIVATE
         CYW43_LWIP=0
+        ENABLE_SERIAL=${ENABLE_SERIAL_VALUE}
         PICO_FLASH_ASSUME_CORE1_SAFE=1
         WDL_RESAMPLE_TYPE=float
         CYW43_PIO_CLOCK_DIV_INT=5
+        PICO_STDIO_USB_USE_DEFAULT_DESCRIPTORS=0
+        PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
+        PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=0
 )
 
 pico_set_program_name(ds5-bridge "ds5-bridge")
@@ -77,7 +88,7 @@ pico_set_program_version(ds5-bridge "0.5.3")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(ds5-bridge 1)
-pico_enable_stdio_usb(ds5-bridge 0)
+pico_enable_stdio_usb(ds5-bridge ${ENABLE_SERIAL_VALUE})
 
 # Add the standard include files to the build
 #target_include_directories(ds5-bridge PRIVATE
