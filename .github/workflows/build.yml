@@ -100,9 +100,9 @@ jobs:
           archive: false
           if-no-files-found: error
 
-      - name: Upload DSE UF2 artifact
+      - name: Upload Debug UF2 artifact
         uses: actions/upload-artifact@v7
         with:
-          path: artifacts/ds5-bridge-dse.uf2
+          path: artifacts/ds5-bridge-debug.uf2
           archive: false
           if-no-files-found: error
