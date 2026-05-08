@@ -298,7 +298,7 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
         }
 
         case HCI_EVENT_DISCONNECTION_COMPLETE: {
-#ifndef ENABLE_SERIAL
+#if !ENABLE_SERIAL
             tud_disconnect();
 #endif
             gap_connectable_control(1);
@@ -347,7 +347,7 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
                 }else if (size > 1){
                     is_dse = true;
                 }
-#ifndef ENABLE_SERIAL
+#if !ENABLE_SERIAL
                 tud_connect();
 #endif
             }
