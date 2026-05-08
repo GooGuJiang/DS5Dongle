@@ -192,6 +192,7 @@ int main() {
     }
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
 
+#ifndef ENABLE_SERIAL
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
         // 当崩溃重启以后，闪三下灯
@@ -206,6 +207,7 @@ int main() {
     } else {
         printf("Clean boot\n");
     }
+#endif
   
     // Initialize the critical section for the report buffer
     critical_section_init(&report_cs);
@@ -217,10 +219,14 @@ int main() {
 
     audio_init();
 
+#ifndef ENABLE_SERIAL
     watchdog_enable(1000, true);
+#endif
 
     while (1) {
+#ifndef ENABLE_SERIAL
         watchdog_update();
+#endif
         cyw43_arch_poll();
         tud_task();
         audio_loop();
