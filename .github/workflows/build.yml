@@ -90,6 +90,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_PATH="$PICO_SDK_PATH" \
             -DENABLE_SERIAL=ON
+            -DENABLE_VERBOSE=ON
           cmake --build build/debug --target ds5-bridge
           cp build/debug/ds5-bridge.uf2 artifacts/ds5-bridge-debug.uf2
 
