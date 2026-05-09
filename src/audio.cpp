@@ -105,20 +105,23 @@ void audio_loop() {
         pkt[0] = REPORT_ID;
         pkt[1] = reportSeqCounter << 4;
         reportSeqCounter = (reportSeqCounter + 1) & 0x0F;
-        pkt[2] = 0x11 | (1 << 7);
+        pkt[2] = 0x11 | 0 << 6 | 1 << 7;
         pkt[3] = 7;
         pkt[4] = 0b11111110;
-        const auto buf_len = get_config().haptics_buffer_length;
+        const auto buf_len = get_config().audio_buffer_length;
         pkt[5] = buf_len;
         pkt[6] = buf_len;
         pkt[7] = buf_len;
-        pkt[8] = buf_len;
-        pkt[9] = buf_len; // buffer length
+        pkt[8] = buf_len; // 这 4 个字节的作用未知，调整没有效果
+        pkt[9] = buf_len; // audio buffer length 只有调整这个字节生效。
         pkt[10] = packetCounter++;
-        pkt[11] = 0x12 | (1 << 7);
+        pkt[11] = 0x12 | 0 << 6 | 1 << 7;
         pkt[12] = SAMPLE_SIZE;
         memcpy(pkt + 13, haptic_buf, SAMPLE_SIZE);
         pkt[77] = (plug_headset ? 0x16 : 0x13) | 0 << 6 | 1 << 7; // Speaker: 0x13
+        // L Headset Mono: 0x14
+        // L Headset R Speaker: 0x15
+        // Headset: 0x16
         pkt[78] = 200;
         critical_section_enter_blocking(&opus_cs);
         memcpy(pkt + 79, opus_buf, 200);
