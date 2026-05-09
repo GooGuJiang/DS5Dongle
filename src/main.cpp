@@ -23,6 +23,7 @@
 
 int reportSeqCounter = 0;
 uint8_t packetCounter = 0;
+bool spk_active = false;
 
 uint8_t interrupt_in_data[63] = {
     0x7f, 0x7d, 0x7f, 0x7e, 0x00, 0x00, 0xa7,
@@ -66,7 +67,7 @@ void interrupt_loop() {
     if (should_send) {
         if (!tud_hid_report(0x01, safe_report, 63)) {
             printf("[USBHID] tud_hid_report error\n");
-            
+
             // If the report failed to queue, restore the dirty flag 
             // so we try again on the next loop iteration.
             critical_section_enter_blocking(&report_cs);
@@ -113,7 +114,7 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
     (void) reqlen;
 
     if (is_pico_cmd(report_id)) {
-        return pico_cmd_get(report_id,buffer,reqlen);
+        return pico_cmd_get(report_id, buffer, reqlen);
     }
 
     std::vector<uint8_t> feature_data = get_feature_data(report_id, reqlen);
@@ -122,6 +123,19 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
     }
 
     return feature_data.empty() ? 0 : feature_data.size() - 1;
+}
+
+bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_request) {
+    (void) rhport;
+    uint8_t const itf = tu_u16_low(p_request->wIndex); // wInterface
+    uint8_t const alt = tu_u16_low(p_request->wValue); // bAlternateSetting
+
+    if (itf == 1) {
+        printf("[AUDIO] Set interface Speaker to alternate setting %d\n", alt);
+        spk_active = alt;
+    }
+
+    return true;
 }
 
 // Invoked when received SET_REPORT control request or
@@ -135,8 +149,8 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     (void) bufsize;
 
     if (is_pico_cmd(report_id)) {
-        printf("[HID] Receive 0xf6 setting config, funcid:0x%02X\n",buffer[0]);
-        pico_cmd_set(report_id,buffer,bufsize);
+        printf("[HID] Receive 0xf6 setting config, funcid:0x%02X\n", buffer[0]);
+        pico_cmd_set(report_id, buffer, bufsize);
         return;
     }
 
@@ -144,6 +158,10 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
     if (report_id == 0) {
         switch (buffer[0]) {
             case 0x02: {
+                if (spk_active) {
+                    set_interrupt_out_data(buffer + 1, bufsize - 1);
+                    break;
+                }
                 uint8_t outputData[78];
                 outputData[0] = 0x31;
                 outputData[1] = reportSeqCounter << 4;
@@ -162,7 +180,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         report_id == 0x60 ||
         report_id == 0x62 ||
         report_id == 0x61) {
-        set_feature_data(report_id,const_cast<uint8_t *>(buffer),bufsize);
+        set_feature_data(report_id, const_cast<uint8_t *>(buffer), bufsize);
         return;
     }
 }
@@ -196,10 +214,10 @@ int main() {
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
         // 当崩溃重启以后，闪三下灯
-        for (int i = 0;i < 6;i++) {
+        for (int i = 0; i < 6; i++) {
             if (i % 2 == 0) {
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, true);
-            }else {
+            } else {
                 cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
             }
             sleep_ms(500);
@@ -208,7 +226,7 @@ int main() {
         printf("Clean boot\n");
     }
 #endif
-  
+
     // Initialize the critical section for the report buffer
     critical_section_init(&report_cs);
 
