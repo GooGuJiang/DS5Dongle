@@ -360,10 +360,14 @@ static void l2cap_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t 
             if (packet[0] == 0xA3) {
                 uint8_t report_id = packet[1];
                 feature_data[report_id].assign(packet + 1, packet + size);
+#if ENABLE_VERBOSE
                 printf("[L2CAP] Stored Feature Report 0x%02X, len=%u\n", report_id, size - 1);
+#endif
             }
+#if ENABLE_VERBOSE
             printf("[L2CAP] HID Control data len=%u\n", size);
             printf_hexdump(packet, size);
+#endif
             bt_data_callback(CONTROL, packet, size);
         } else {
             printf("[L2CAP] Data on unknown channel 0x%04X (Interrupt: 0x%04X, Control: 0x%04X)\n",
@@ -514,7 +518,9 @@ vector<uint8_t> get_feature_data(uint8_t reportId, uint16_t len) {
         if (hid_control_cid != 0) {
             uint8_t get_feature[] = {0x43, reportId};
             l2cap_send(hid_control_cid, get_feature, sizeof(get_feature));
+#if ENABLE_VERBOSE
             printf("[L2CAP] Requesting Get Feature Report 0x%02X\n", reportId);
+#endif
         }
     }
     return ret;
@@ -528,8 +534,10 @@ void set_feature_data(uint8_t reportId, uint8_t *data, uint16_t len) {
         memcpy(get_feature + 2, data, len);
         fill_feature_report_checksum(get_feature + 1, len + 1);
         l2cap_send(hid_control_cid, get_feature, len + 2);
+#if ENABLE_VERBOSE
         printf("[L2CAP] Requesting Set Feature Report 0x%02X\n", reportId);
         printf_hexdump(get_feature, len + 2);
+#endif
     }
 }
 

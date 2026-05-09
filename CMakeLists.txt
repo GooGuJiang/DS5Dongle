@@ -34,6 +34,12 @@ if (ENABLE_SERIAL)
 else ()
         set(ENABLE_SERIAL_VALUE 0)
 endif ()
+option(ENABLE_VERBOSE "Enable Log Verbose" OFF)
+if(ENABLE_VERBOSE)
+    set(ENABLE_VERBOSE_VALUE 1)
+else()
+    set(ENABLE_VERBOSE_VALUE 0)
+endif ()
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -81,6 +87,7 @@ target_compile_definitions(ds5-bridge PRIVATE
         PICO_STDIO_USB_USE_DEFAULT_DESCRIPTORS=0
         PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
         PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=0
+        ENABLE_VERBOSE=${ENABLE_VERBOSE_VALUE}
 )
 
 pico_set_program_name(ds5-bridge "ds5-bridge")
