@@ -40,7 +40,7 @@ struct audio_raw_element {
     float data[512 * 2];
 };
 
-uint8_t interrupt_out_data[63] = {
+uint8_t state_data[63] = {
     0xfd, 0xf7, 0x0, 0x0,
     0x7f, 0x7f, // Headphones, Speaker
     0xff, 0x9, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
@@ -52,8 +52,8 @@ uint8_t interrupt_out_data[63] = {
     0xff, 0xd7, 0x00, // RGB LED: R, G, B (Nijika Color!)✨
 };
 
-void set_interrupt_out_data(const uint8_t* data, const uint8_t len) {
-    memcpy(interrupt_out_data, data, len);
+void set_state_data(const uint8_t* data, const uint8_t len) {
+    memcpy(state_data, data, len);
 }
 
 void set_headset(bool state) {
@@ -133,7 +133,7 @@ void audio_loop() {
         pkt[10] = packetCounter++;
         pkt[11] = 0x10 | 0 << 6 | 1 << 7;
         pkt[12] = 63;
-        memcpy(pkt + 13, interrupt_out_data, sizeof(interrupt_out_data));
+        memcpy(pkt + 13, state_data, sizeof(state_data));
         pkt[76] = 0x12 | 0 << 6 | 1 << 7;
         pkt[77] = SAMPLE_SIZE;
         memcpy(pkt + 78, haptic_buf, SAMPLE_SIZE);

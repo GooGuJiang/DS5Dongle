@@ -159,7 +159,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
         switch (buffer[0]) {
             case 0x02: {
                 if (spk_active) {
-                    set_interrupt_out_data(buffer + 1, bufsize - 1);
+                    set_state_data(buffer + 1, bufsize - 1);
                     break;
                 }
                 uint8_t outputData[78];
