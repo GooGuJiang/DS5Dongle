@@ -162,12 +162,9 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             break;
         }
 
-        case GAP_EVENT_INQUIRY_COMPLETE: {
-            printf("[HCI] GAP Inquiry complete.\n");
-            break;
-        }
+        case GAP_EVENT_INQUIRY_COMPLETE:
         case HCI_EVENT_INQUIRY_COMPLETE: {
-            printf("[HCI] HCI Inquiry complete.\n");
+            printf("[HCI] Inquiry complete.\n");
             if (device_found) {
                 printf("[HCI] Connecting to %s...\n", bd_addr_to_str(current_device_addr));
                 new_pair = true;
@@ -175,10 +172,12 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
                              hci_usable_acl_packet_types(), 0, 0, 0, 1);
                 break;
             }
-            printf("[HCI] Restart inquiry\n");
-            gap_inquiry_start(30);
-            gap_connectable_control(1);
-            gap_discoverable_control(1);
+            if (event_type == HCI_EVENT_INQUIRY_COMPLETE) {
+                printf("[HCI] Restart inquiry\n");
+                gap_inquiry_start(30);
+                gap_connectable_control(1);
+                gap_discoverable_control(1);
+            }
             break;
         }
         case HCI_EVENT_COMMAND_STATUS: {
