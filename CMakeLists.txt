@@ -46,6 +46,30 @@ else ()
         set(ENABLE_OTA_FIRMWARE_VALUE 0)
 endif ()
 option(ENABLE_OTA_AB_PARTITION "Enable RP2350 A/B partitioned TBYB update image" OFF)
+if (ENABLE_OTA_AB_PARTITION)
+        set(ENABLE_OTA_AB_PARTITION_VALUE 1)
+else ()
+        set(ENABLE_OTA_AB_PARTITION_VALUE 0)
+endif ()
+option(ENABLE_OTA_TBYB "Mark RP2350 OTA image as Try-Before-You-Buy" OFF)
+if (ENABLE_OTA_TBYB)
+        set(ENABLE_OTA_TBYB_VALUE 1)
+else ()
+        set(ENABLE_OTA_TBYB_VALUE 0)
+endif ()
+option(ENABLE_WATCHDOG "Enable runtime watchdog reset" OFF)
+if (ENABLE_WATCHDOG)
+        set(ENABLE_WATCHDOG_VALUE 1)
+else ()
+        set(ENABLE_WATCHDOG_VALUE 0)
+endif ()
+option(USB_CONNECT_BEFORE_BT "Enumerate USB before the controller handshake completes" OFF)
+if (USB_CONNECT_BEFORE_BT)
+        set(USB_CONNECT_BEFORE_BT_VALUE 1)
+else ()
+        set(USB_CONNECT_BEFORE_BT_VALUE 0)
+endif ()
+option(ENABLE_WIFI_FW_PARTITION "Place CYW43 firmware in a dedicated RP2350 partition" OFF)
 option(ENABLE_VERBOSE "Enable Log Verbose" OFF)
 if(ENABLE_VERBOSE)
     set(ENABLE_VERBOSE_VALUE 1)
@@ -128,19 +152,31 @@ target_compile_definitions(ds5-bridge PRIVATE
         PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
         PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=0
         ENABLE_OTA_FIRMWARE=${ENABLE_OTA_FIRMWARE_VALUE}
+        ENABLE_OTA_AB_PARTITION=${ENABLE_OTA_AB_PARTITION_VALUE}
         ENABLE_VERBOSE=${ENABLE_VERBOSE_VALUE}
         ENABLE_BATT_LED=${ENABLE_BATT_LED_VALUE}
         SYS_CLOCK_KHZ=${SYS_CLOCK_KHZ_VALUE}
         DISABLE_SPEAKER_PROC=${DISABLE_SPEAKER_PROC_VALUE}
+        ENABLE_WATCHDOG=${ENABLE_WATCHDOG_VALUE}
+        USB_CONNECT_BEFORE_BT=${USB_CONNECT_BEFORE_BT_VALUE}
 )
 
-if (ENABLE_OTA_FIRMWARE AND ENABLE_OTA_AB_PARTITION AND NOT PICO_W_BUILD)
+if (ENABLE_OTA_FIRMWARE AND ENABLE_OTA_TBYB AND NOT PICO_W_BUILD)
         target_compile_definitions(ds5-bridge PRIVATE
                 PICO_CRT0_IMAGE_TYPE_TBYB=1
         )
-        pico_use_wifi_firmware_partition(ds5-bridge)
+        if (ENABLE_WIFI_FW_PARTITION)
+                pico_use_wifi_firmware_partition(ds5-bridge)
+        endif ()
         pico_hash_binary(ds5-bridge)
-        pico_sign_binary(ds5-bridge ${CMAKE_CURRENT_LIST_DIR}/ota_update/private.pem)
+elseif (ENABLE_OTA_FIRMWARE AND NOT PICO_W_BUILD)
+        # 非 TBYB 调试/首刷镜像仍保留 RP2350 hash，但不改变 IMAGE_DEF 类型，
+        # 尽量接近未开启 OTA A/B 时的普通可启动镜像。
+        pico_hash_binary(ds5-bridge)
+endif ()
+
+if (NOT PICO_W_BUILD)
+        pico_set_uf2_family(ds5-bridge "rp2350-arm-s")
 endif ()
 
 option(ENABLE_WAKE_HID "Wake the Windows host on PS-button press" OFF)
@@ -165,8 +201,11 @@ pico_set_program_name(ds5-bridge "ds5-bridge")
 pico_set_program_version(ds5-bridge "${VERSION}")
 
 # Modify the below lines to enable/disable output over UART/USB
+# This target provides its own TinyUSB descriptors/device stack, so do not enable
+# pico_stdio_usb here. Enabling pico_stdio_usb together with tinyusb_device can
+# install a second CDC descriptor/polling path and cause Windows Code 43.
 pico_enable_stdio_uart(ds5-bridge 1)
-pico_enable_stdio_usb(ds5-bridge ${ENABLE_SERIAL_VALUE})
+pico_enable_stdio_usb(ds5-bridge 0)
 
 # Add the standard include files to the build
 #target_include_directories(ds5-bridge PRIVATE

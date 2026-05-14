@@ -32,6 +32,12 @@ constexpr uint32_t kFlashSectorEraseSize = 4096u;
 constexpr uint32_t kMaxFramePayload = 2048u;
 constexpr uint32_t kHeaderSize = 12u;
 constexpr uint8_t kOtaHidReportId = 0xf6u;
+constexpr uint32_t kPartitionTableReservedSize = 2u * kFlashSectorEraseSize;
+constexpr uint32_t kMainSlotSize = 1792u * 1024u;
+constexpr uint32_t kMainAFlashOffset = kPartitionTableReservedSize;
+constexpr uint32_t kMainBFlashOffset = kMainAFlashOffset + kMainSlotSize;
+constexpr uint32_t kMainARuntimeBase = XIP_BASE + kMainAFlashOffset;
+constexpr uint32_t kMainBRuntimeBase = XIP_BASE + kMainBFlashOffset;
 
 enum FrameType : uint8_t {
     FRAME_START = 0x01,
@@ -62,7 +68,7 @@ struct BrowserOtaState {
     int blocks_done = 0;
     uint32_t family_id = 0;
     uint32_t flash_update = 0;
-    int32_t write_offset = 0;
+    int64_t write_offset = 0;
     uint32_t write_size = 0;
     uint32_t highest_erased_sector = 0xffffffffu;
     uint32_t bytes_received = 0;
@@ -178,36 +184,73 @@ void fail_update(int code, const char *message) {
     g_ota.complete = false;
 }
 
+enum class RunningSlot {
+    MainA,
+    MainB,
+    Unknown,
+};
+
+RunningSlot detect_running_slot() {
+    // ARM Thumb 函数指针 bit0 可能为 1，所以清掉后再和 XIP 地址范围比较。
+    uintptr_t pc = reinterpret_cast<uintptr_t>(&detect_running_slot);
+    pc &= ~static_cast<uintptr_t>(1u);
+
+    if (pc >= kMainARuntimeBase && pc < kMainARuntimeBase + kMainSlotSize) {
+        return RunningSlot::MainA;
+    }
+    if (pc >= kMainBRuntimeBase && pc < kMainBRuntimeBase + kMainSlotSize) {
+        return RunningSlot::MainB;
+    }
+    return RunningSlot::Unknown;
+}
+
 bool prepare_target_from_first_block(const uf2_block_t *block) {
     g_ota.num_blocks = static_cast<int>(block->num_blocks);
     g_ota.family_id = block->file_size; // UF2 family ID 在 Pico SDK 示例中复用 file_size 字段。
 
-    resident_partition_t uf2_target_partition;
-    rom_flash_flush_cache();
-    int ret = rom_get_uf2_target_partition(g_workarea, sizeof(g_workarea), g_ota.family_id, &uf2_target_partition);
-    if (ret) {
-        fail_update(ret, "rom_get_uf2_target_partition failed");
+    if (g_ota.num_blocks <= 0) {
+        fail_update(-14, "invalid UF2 block count");
         return false;
     }
 
-    uint16_t first_sector_number =
-        (uf2_target_partition.permissions_and_location & PICOBIN_PARTITION_LOCATION_FIRST_SECTOR_BITS) >>
-        PICOBIN_PARTITION_LOCATION_FIRST_SECTOR_LSB;
-    uint16_t last_sector_number =
-        (uf2_target_partition.permissions_and_location & PICOBIN_PARTITION_LOCATION_LAST_SECTOR_BITS) >>
-        PICOBIN_PARTITION_LOCATION_LAST_SECTOR_LSB;
-    uint32_t code_start_addr = first_sector_number * kFlashSectorEraseSize;
-    uint32_t code_end_addr = (last_sector_number + 1u) * kFlashSectorEraseSize;
+    const uint32_t uf2_payload_bytes =
+        static_cast<uint32_t>(g_ota.num_blocks) * block->payload_size;
+    if (uf2_payload_bytes > kMainSlotSize) {
+        fail_update(-15, "UF2 is larger than 1792K Main slot");
+        return false;
+    }
 
-    g_ota.flash_update = code_start_addr + XIP_BASE;
-    g_ota.write_offset = static_cast<int32_t>(code_start_addr + XIP_BASE - block->target_addr);
-    g_ota.write_size = code_end_addr - code_start_addr;
+    const RunningSlot running = detect_running_slot();
+    uint32_t target_base = 0;
+    const char *running_name = "unknown";
+    const char *target_name = "unknown";
+
+    if (running == RunningSlot::MainA) {
+        target_base = kMainBRuntimeBase;
+        running_name = "Main A";
+        target_name = "Main B";
+    } else if (running == RunningSlot::MainB) {
+        target_base = kMainARuntimeBase;
+        running_name = "Main B";
+        target_name = "Main A";
+    } else {
+        fail_update(-16, "cannot detect current A/B slot");
+        return false;
+    }
+
+    g_ota.flash_update = target_base;
+    g_ota.write_offset =
+        static_cast<int64_t>(target_base) - static_cast<int64_t>(block->target_addr);
+    g_ota.write_size = kMainSlotSize;
     g_ota.metadata_ready = true;
 
-    char extra[128];
+    char extra[192];
     snprintf(extra, sizeof(extra),
-             "\"familyId\":%lu,\"targetBase\":%lu,\"targetSize\":%lu",
+             "\"familyId\":%lu,\"running\":\"%s\",\"target\":\"%s\"," 
+             "\"targetBase\":%lu,\"targetSize\":%lu",
              static_cast<unsigned long>(g_ota.family_id),
+             running_name,
+             target_name,
              static_cast<unsigned long>(g_ota.flash_update),
              static_cast<unsigned long>(g_ota.write_size));
     send_status("target", extra);
@@ -237,7 +280,13 @@ bool write_uf2_block(const uf2_block_t *block) {
         fail_update(-12, "UF2 family id mismatch");
         return false;
     }
-    uint32_t write_addr = block->target_addr + static_cast<uint32_t>(g_ota.write_offset);
+    const int64_t mapped_addr =
+        static_cast<int64_t>(block->target_addr) + g_ota.write_offset;
+    if (mapped_addr < 0 || mapped_addr > 0xffffffffll) {
+        fail_update(-17, "mapped UF2 address overflow");
+        return false;
+    }
+    uint32_t write_addr = static_cast<uint32_t>(mapped_addr);
     uint32_t target_end = g_ota.flash_update + g_ota.write_size;
     if (write_addr < g_ota.flash_update || write_addr + block->payload_size > target_end) {
         fail_update(-13, "UF2 target address out of inactive partition");

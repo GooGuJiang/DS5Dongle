@@ -12,6 +12,9 @@
 #include "hardware/vreg.h"
 #include "hardware/watchdog.h"
 #include "pico/cyw43_arch.h"
+#if defined(PICO_RP2350) && ENABLE_OTA_AB_PARTITION && PICO_CRT0_IMAGE_TYPE_TBYB
+#include "pico/bootrom.h"
+#endif
 #if ENABLE_SERIAL
 #include "pico/stdio_usb.h"
 #endif
@@ -41,6 +44,25 @@ uint8_t interrupt_in_data[63] = {
 
 critical_section_t report_cs;
 volatile bool report_dirty = false;
+
+#if defined(PICO_RP2350) && ENABLE_OTA_AB_PARTITION && PICO_CRT0_IMAGE_TYPE_TBYB
+uint8_t explicit_buy_workarea[4096] __attribute__((aligned(4)));
+bool explicit_buy_done = false;
+
+void buy_tbyb_image_if_needed() {
+    if (explicit_buy_done) {
+        return;
+    }
+    explicit_buy_done = true;
+
+    const int rc = rom_explicit_buy(explicit_buy_workarea, sizeof(explicit_buy_workarea));
+    if (rc) {
+        printf("[BOOT] explicit buy skipped/failed: %d\n", rc);
+    } else {
+        printf("[BOOT] explicit buy complete\n");
+    }
+}
+#endif
 
 void interrupt_loop() {
     if (!tud_hid_ready()) return;
@@ -212,6 +234,10 @@ int main() {
     board_init_after_tusb();
 #if ENABLE_SERIAL
     stdio_usb_init();
+#elif USB_CONNECT_BEFORE_BT
+    // 仅用于 USB 枚举调试。正常控制器模式必须等 bt.cpp 确认 DS5/DSE 后再连接，
+    // 否则 Windows 会先看到控制器，但底层手柄控制权尚未建立。
+    tud_connect();
 #endif
 
     if (cyw43_arch_init()) {
@@ -224,7 +250,13 @@ int main() {
     battery_led_init();
 #endif
 
-#if !ENABLE_SERIAL
+#if defined(PICO_RP2350) && ENABLE_OTA_AB_PARTITION && PICO_CRT0_IMAGE_TYPE_TBYB
+    // TBYB 镜像启动后必须在 BootROM 回退窗口内 buy，
+    // 否则会自动回到旧槽；旧槽无有效镜像时就表现为回 BOOTSEL。
+    buy_tbyb_image_if_needed();
+#endif
+
+#if !ENABLE_SERIAL && ENABLE_WATCHDOG
     if (watchdog_caused_reboot()) {
         printf("Rebooted by Watchdog!\n");
         // 当崩溃重启以后，闪三下灯
@@ -251,12 +283,12 @@ int main() {
 
     audio_init();
 
-#if !ENABLE_SERIAL
+#if !ENABLE_SERIAL && ENABLE_WATCHDOG
     watchdog_enable(1000, true);
 #endif
 
     while (1) {
-#if !ENABLE_SERIAL
+#if !ENABLE_SERIAL && ENABLE_WATCHDOG
         watchdog_update();
 #endif
         cyw43_arch_poll();
