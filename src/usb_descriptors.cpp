@@ -362,8 +362,8 @@ uint8_t descriptor_configuration[] = {
     0x00, // bCountryCode: Not localized
     0x01, // bNumDescriptors: 1 report descriptor
     0x22, // bDescriptorType: Report
-    0x31, 0x01, // wDescriptorLength: 305 (0x0131) DS
-    // 0xA5, 0x01, // wDescriptorLength: 421 (0x01A5) DSE
+    0x39, 0x01, // wDescriptorLength: 313 (0x0139) DS
+    // 0xAD, 0x01, // wDescriptorLength: 429 (0x01AD) DSE
 
     // Endpoint Descriptor (HID IN: EP4)
     0x07, // bLength
@@ -408,9 +408,9 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     descriptor_configuration[offset - 1] = bInterval;
     descriptor_configuration[offset - 8] = bInterval;
     if (ds_mode()) {
-        descriptor_configuration[offset - 16] = 0x31;
+        descriptor_configuration[offset - 16] = 0x39;
     }else {
-        descriptor_configuration[offset - 16] = 0xA5;
+        descriptor_configuration[offset - 16] = 0xAD;
     }
     return descriptor_configuration;
 }
@@ -569,9 +569,14 @@ uint8_t const desc_hid_report_ds[] = {
     0x09, 0x38,
     0x95, 0x3F,
     0xB1, 0x02,
+    0x85, 0xF8,
+    0x09, 0x39,
+    0x95, 0x3F,
+    0xB1, 0x02,
     0xC0, // End Collection
-    // 305 bytes
+    // 313 bytes
 };
+static_assert(sizeof(desc_hid_report_ds) == 0x0139);
 
 uint8_t const desc_hid_report_dse[] = {
     0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
@@ -781,9 +786,14 @@ uint8_t const desc_hid_report_dse[] = {
     0x09, 0x38,
     0x95, 0x3F,
     0xB1, 0x02,
+    0x85, 0xF8,
+    0x09, 0x39,
+    0x95, 0x3F,
+    0xB1, 0x02,
     0xC0, // End Collection
-    // 421 bytes
+    // 429 bytes
 };
+static_assert(sizeof(desc_hid_report_dse) == 0x01AD);
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor

@@ -30,6 +30,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set firmware version
+        run: printf 'FIRMWARE_VERSION=%s\n' "${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
       - name: Prepare build dependency cache
         id: apt-cache
         run: |
@@ -79,7 +82,8 @@ jobs:
         run: |
           cmake -S . -B build/standard -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DPICO_SDK_PATH="$PICO_SDK_PATH"
+            -DPICO_SDK_PATH="$PICO_SDK_PATH" \
+            -DVERSION="$FIRMWARE_VERSION"
           cmake --build build/standard --target ds5-bridge
           mkdir -p artifacts
           cp build/standard/ds5-bridge.uf2 artifacts/ds5-bridge.uf2
@@ -90,7 +94,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_PATH="$PICO_SDK_PATH" \
             -DENABLE_SERIAL=ON \
-            -DENABLE_VERBOSE=ON
+            -DENABLE_VERBOSE=ON \
+            -DVERSION="$FIRMWARE_VERSION"
           cmake --build build/debug --target ds5-bridge
           cp build/debug/ds5-bridge.uf2 artifacts/ds5-bridge-debug.uf2
 
@@ -99,7 +104,8 @@ jobs:
           cmake -S . -B build/no-batt-led -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_PATH="$PICO_SDK_PATH" \
-            -DENABLE_BATT_LED=OFF
+            -DENABLE_BATT_LED=OFF \
+            -DVERSION="$FIRMWARE_VERSION"
           cmake --build build/no-batt-led --target ds5-bridge
 
       - name: Build Pico W firmware
@@ -107,7 +113,8 @@ jobs:
           cmake -S . -B build/picow -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DPICO_SDK_PATH="$PICO_SDK_PATH" \
-            -DPICO_W_BUILD=ON
+            -DPICO_W_BUILD=ON \
+            -DVERSION="$FIRMWARE_VERSION"
           cmake --build build/picow --target ds5-bridge
           cp build/picow/ds5-bridge.uf2 artifacts/ds5-bridge-picow.uf2
 
