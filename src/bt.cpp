@@ -15,6 +15,7 @@
 #include "bsp/board_api.h"
 #include "classic/sdp_server.h"
 #include "config.h"
+#include "ota_firmware/ota_firmware.h"
 #include "pico/util/queue.h"
 
 #define MTU_CONTROL 672
@@ -308,7 +309,9 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
         case HCI_EVENT_DISCONNECTION_COMPLETE: {
 #if !ENABLE_SERIAL
-            tud_disconnect();
+            if (!ota_firmware_active()) {
+                tud_disconnect();
+            }
 #endif
             gap_connectable_control(1);
             gap_discoverable_control(1);

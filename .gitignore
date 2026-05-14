@@ -2,3 +2,6 @@ build
 .vscode
 .idea
 example
+build-ota-*
+ota_update
+tools

@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include "ota_firmware/ota_firmware.h"
 #include "config.h"
 #include "device/usbd.h"
 #include "pico/time.h"
@@ -50,6 +51,7 @@ void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
     // 0x01 update config in variable
     // 0x02 write config to flash
     // 0x03 reconnect tinyusb device;
+    // 0x04 enter browser OTA mode over HID Feature Reports / WebHID
     if (buffer[0] == 0x01) {
         printf("[CMD] Enter config set func\n");
         set_config(buffer + 1, bufsize - 1);
@@ -63,5 +65,11 @@ void pico_cmd_set(uint8_t report_id, uint8_t const *buffer, uint16_t bufsize) {
         tud_disconnect();
         sleep_ms(150);
         tud_connect();
+    }
+    if (buffer[0] == 0x04) {
+        printf("[CMD] Enter browser OTA func\n");
+        if (!ota_firmware_enter()) {
+            printf("[OTA] Browser OTA is unavailable or already active\n");
+        }
     }
 }

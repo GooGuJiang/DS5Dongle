@@ -17,6 +17,7 @@
 #endif
 #include "config.h"
 #include "cmd.h"
+#include "ota_firmware/ota_firmware.h"
 #if ENABLE_BATT_LED
 #include "battery_led.h"
 #endif
@@ -116,12 +117,15 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t *buffer,
                                uint16_t reqlen) {
     (void) itf;
-    (void) report_id;
-    (void) report_type;
-    (void) buffer;
-    (void) reqlen;
 
-    if (is_pico_cmd(report_id)) {
+    if (ota_firmware_usb_cdc_mode()) {
+        if (report_type == HID_REPORT_TYPE_FEATURE && report_id == 0xF6) {
+            return ota_firmware_hid_get_report(report_id, buffer, reqlen);
+        }
+        return 0;
+    }
+
+    if (report_type == HID_REPORT_TYPE_FEATURE && is_pico_cmd(report_id)) {
         return pico_cmd_get(report_id, buffer, reqlen);
     }
 
@@ -150,13 +154,16 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
 void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t const *buffer,
                            uint16_t bufsize) {
     (void) itf;
-    (void) report_id;
-    (void) report_type;
-    (void) buffer;
-    (void) bufsize;
 
-    if (is_pico_cmd(report_id)) {
-        printf("[HID] Receive 0xf6 setting config, funcid:0x%02X\n", buffer[0]);
+    if (ota_firmware_usb_cdc_mode()) {
+        if (report_type == HID_REPORT_TYPE_FEATURE || report_type == HID_REPORT_TYPE_OUTPUT) {
+            ota_firmware_hid_report_received(report_id, buffer, bufsize);
+        }
+        return;
+    }
+
+    if (report_type == HID_REPORT_TYPE_FEATURE && is_pico_cmd(report_id)) {
+        printf("[HID] Receive 0xf6 setting config, funcid:0x%02X\n", bufsize ? buffer[0] : 0);
         pico_cmd_set(report_id, buffer, bufsize);
         return;
     }
@@ -254,6 +261,10 @@ int main() {
 #endif
         cyw43_arch_poll();
         tud_task();
+        ota_firmware_loop();
+        if (ota_firmware_active()) {
+            continue;
+        }
         audio_loop();
         interrupt_loop();
 #if ENABLE_BATT_LED

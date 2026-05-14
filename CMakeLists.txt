@@ -39,6 +39,13 @@ if (ENABLE_SERIAL)
 else ()
         set(ENABLE_SERIAL_VALUE 0)
 endif ()
+option(ENABLE_OTA_FIRMWARE "Enable browser Web Serial UF2 firmware updater over USB CDC" OFF)
+if (ENABLE_OTA_FIRMWARE)
+        set(ENABLE_OTA_FIRMWARE_VALUE 1)
+else ()
+        set(ENABLE_OTA_FIRMWARE_VALUE 0)
+endif ()
+option(ENABLE_OTA_AB_PARTITION "Enable RP2350 A/B partitioned TBYB update image" OFF)
 option(ENABLE_VERBOSE "Enable Log Verbose" OFF)
 if(ENABLE_VERBOSE)
     set(ENABLE_VERBOSE_VALUE 1)
@@ -87,6 +94,7 @@ add_executable(ds5-bridge
         src/bt.cpp
         src/config.cpp
         src/cmd.cpp
+        src/ota_firmware/ota_firmware.cpp
 )
 
 if (ENABLE_BATT_LED)
@@ -119,11 +127,21 @@ target_compile_definitions(ds5-bridge PRIVATE
         PICO_STDIO_USB_USE_DEFAULT_DESCRIPTORS=0
         PICO_STDIO_USB_ENABLE_RESET_VIA_BAUD_RATE=0
         PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=0
+        ENABLE_OTA_FIRMWARE=${ENABLE_OTA_FIRMWARE_VALUE}
         ENABLE_VERBOSE=${ENABLE_VERBOSE_VALUE}
         ENABLE_BATT_LED=${ENABLE_BATT_LED_VALUE}
         SYS_CLOCK_KHZ=${SYS_CLOCK_KHZ_VALUE}
         DISABLE_SPEAKER_PROC=${DISABLE_SPEAKER_PROC_VALUE}
 )
+
+if (ENABLE_OTA_FIRMWARE AND ENABLE_OTA_AB_PARTITION AND NOT PICO_W_BUILD)
+        target_compile_definitions(ds5-bridge PRIVATE
+                PICO_CRT0_IMAGE_TYPE_TBYB=1
+        )
+        pico_use_wifi_firmware_partition(ds5-bridge)
+        pico_hash_binary(ds5-bridge)
+        pico_sign_binary(ds5-bridge ${CMAKE_CURRENT_LIST_DIR}/ota_update/private.pem)
+endif ()
 
 option(ENABLE_WAKE_HID "Wake the Windows host on PS-button press" OFF)
 if(ENABLE_WAKE_HID)
@@ -166,6 +184,8 @@ target_link_libraries(ds5-bridge
         hardware_watchdog
         hardware_timer
         hardware_flash
+        pico_sha256
+        boot_uf2_headers
         pico_btstack_classic
 #        pico_cyw43_arch_threadsafe_background
         pico_cyw43_arch_poll

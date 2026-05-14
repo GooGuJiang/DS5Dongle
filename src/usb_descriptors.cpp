@@ -26,6 +26,7 @@
 #include "bsp/board_api.h"
 #include "tusb.h"
 #include "config.h"
+#include "ota_firmware/ota_firmware.h"
 
 #ifndef ENABLE_SERIAL
 #define ENABLE_SERIAL 0
@@ -37,6 +38,14 @@ bool ds_mode() {
     }
     return get_config().controller_mode == 0;
 }
+
+enum {
+    OTA_ITF_NUM_HID = 0,
+    OTA_ITF_NUM_TOTAL,
+    OTA_HID_REPORT_DESC_LEN = 23,
+    OTA_HID_FEATURE_SIZE = 62,
+    OTA_CONFIG_DESC_LEN_TOTAL = TUD_CONFIG_DESC_LEN + 9 + 9 + 7,
+};
 
 enum {
     ITF_NUM_AUDIO_CONTROL = 0,
@@ -68,9 +77,7 @@ enum {
     STRID_MANUFACTURER,
     STRID_PRODUCT,
     STRID_SERIAL,
-#if ENABLE_SERIAL
     STRID_CDC,
-#endif
 };
 
 //--------------------------------------------------------------------+
@@ -110,7 +117,23 @@ tusb_desc_device_t desc_device =
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
 uint8_t const *tud_descriptor_device_cb(void) {
-    desc_device.idProduct = ds_mode() ? 0x0CE6 : 0x0DF2;
+    if (ota_firmware_usb_cdc_mode()) {
+        desc_device.bDeviceClass = 0x00;
+        desc_device.bDeviceSubClass = 0x00;
+        desc_device.bDeviceProtocol = 0x00;
+        desc_device.idProduct = 0x0DF4;
+    } else {
+#if ENABLE_SERIAL
+        desc_device.bDeviceClass = TUSB_CLASS_MISC;
+        desc_device.bDeviceSubClass = MISC_SUBCLASS_COMMON;
+        desc_device.bDeviceProtocol = MISC_PROTOCOL_IAD;
+#else
+        desc_device.bDeviceClass = 0x00;
+        desc_device.bDeviceSubClass = 0x00;
+        desc_device.bDeviceProtocol = 0x00;
+#endif
+        desc_device.idProduct = ds_mode() ? 0x0CE6 : 0x0DF2;
+    }
     return reinterpret_cast<uint8_t const *>(&desc_device);
 }
 
@@ -387,11 +410,47 @@ uint8_t descriptor_configuration[] = {
 #endif
 };
 
+uint8_t ota_descriptor_configuration[] = {
+    TUD_CONFIG_DESCRIPTOR(1, OTA_ITF_NUM_TOTAL, 0, OTA_CONFIG_DESC_LEN_TOTAL, TUSB_DESC_CONFIG_ATT_REMOTE_WAKEUP, 250),
+
+    // --- INTERFACE DESCRIPTOR (0.0): OTA HID ---
+    0x09, // bLength
+    0x04, // bDescriptorType (INTERFACE)
+    OTA_ITF_NUM_HID, // bInterfaceNumber
+    0x00, // bAlternateSetting
+    0x01, // bNumEndpoints: IN interrupt endpoint only; OTA data uses Feature SET_REPORT control transfer
+    0x03, // bInterfaceClass: HID
+    0x00, // bInterfaceSubClass: None
+    0x00, // bInterfaceProtocol: None
+    STRID_CDC, // iInterface
+
+    // HID Descriptor
+    0x09, // bLength
+    0x21, // bDescriptorType (HID)
+    0x11, 0x01, // bcdHID: 1.11
+    0x00, // bCountryCode
+    0x01, // bNumDescriptors
+    0x22, // bDescriptorType: Report
+    U16_TO_U8S_LE(OTA_HID_REPORT_DESC_LEN),
+
+    // Endpoint Descriptor (HID IN: EP1)
+    0x07,
+    0x05,
+    0x81,
+    0x03,
+    0x40, 0x00,
+    0x01,
+
+};
+
 // Invoked when received GET CONFIGURATION DESCRIPTOR
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     (void) index; // for multiple configurations
+    if (ota_firmware_usb_cdc_mode()) {
+        return ota_descriptor_configuration;
+    }
     auto bInterval = 0x01;
     switch (get_config().polling_rate_mode) {
         case 0:
@@ -795,11 +854,31 @@ uint8_t const desc_hid_report_dse[] = {
 };
 static_assert(sizeof(desc_hid_report_dse) == 0x01AD);
 
+uint8_t const desc_hid_report_ota[] = {
+    0x06, 0x00, 0xFF, // Usage Page (Vendor Defined 0xFF00)
+    0x09, 0x5A,       // Usage (OTA)
+    0xA1, 0x01,       // Collection (Application)
+
+    0x85, 0xF6,       //   Report ID (246)
+    0x09, 0x01,       //   Usage (OTA FEATURE)
+    0x15, 0x00,       //   Logical Minimum (0)
+    0x26, 0xFF, 0x00, //   Logical Maximum (255)
+    0x75, 0x08,       //   Report Size (8)
+    0x95, 0x3E,       //   Report Count (62) -- WebHID data payload, excluding reportId
+    0xB1, 0x02,       //   Feature (Data,Var,Abs)
+
+    0xC0,             // End Collection
+};
+static_assert(sizeof(desc_hid_report_ota) == OTA_HID_REPORT_DESC_LEN);
+
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
 uint8_t const *tud_hid_descriptor_report_cb(uint8_t itf) {
     (void) itf;
+    if (ota_firmware_usb_cdc_mode()) {
+        return desc_hid_report_ota;
+    }
     if (ds_mode()) {
         return desc_hid_report_ds;
     }
@@ -817,9 +896,7 @@ static char const *string_desc_arr[] =
     "Sony Interactive Entertainment", // 1: Manufacturer
     NULL, // 2: Product
     NULL, // 3: Serials will use unique ID if possible
-#if ENABLE_SERIAL
-    "USB Serial", // 4: CDC interface
-#endif
+    "USB Serial", // 4: CDC interface or OTA HID interface
 };
 
 static uint16_t _desc_str[60 + 1];
@@ -834,6 +911,10 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
         string_desc_arr[2] = "DualSense Wireless Controller";
     }else {
         string_desc_arr[2] = "DualSense Edge Wireless Controller";
+    }
+    if (ota_firmware_usb_cdc_mode()) {
+        string_desc_arr[2] = "DS5Dongle OTA HID";
+        string_desc_arr[4] = "OTA HID";
     }
 
     switch (index) {
