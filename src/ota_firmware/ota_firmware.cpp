@@ -6,6 +6,7 @@
 #include "pico/time.h"
 #include "tusb.h"
 #include "bt.h"
+#include "pico/cyw43_arch.h"
 
 #ifndef ENABLE_OTA_FIRMWARE
 #define ENABLE_OTA_FIRMWARE 0
@@ -32,6 +33,7 @@ constexpr uint32_t kFlashSectorEraseSize = 4096u;
 constexpr uint32_t kMaxFramePayload = 2048u;
 constexpr uint32_t kHeaderSize = 12u;
 constexpr uint8_t kOtaHidReportId = 0xf6u;
+constexpr uint32_t kOtaLedBlinkPeriodUs = 250u * 1000u;
 constexpr uint32_t kPartitionTableReservedSize = 2u * kFlashSectorEraseSize;
 constexpr uint32_t kMainSlotSize = 1792u * 1024u;
 constexpr uint32_t kMainAFlashOffset = kPartitionTableReservedSize;
@@ -45,6 +47,7 @@ enum FrameType : uint8_t {
     FRAME_END = 0x03,
     FRAME_ABORT = 0x04,
     FRAME_QUERY = 0x05,
+    FRAME_EXIT_OTA = 0x06,
 };
 
 struct BrowserOtaState {
@@ -54,9 +57,11 @@ struct BrowserOtaState {
     bool reboot_pending = false;
     bool usb_reenum_pending = false;
     bool usb_reconnect_pending = false;
+    bool led_state = false;
     absolute_time_t reboot_at{};
     absolute_time_t usb_reenum_at{};
     absolute_time_t usb_reconnect_at{};
+    uint64_t led_last_toggle_us = 0;
 
     uint8_t header[kHeaderSize]{};
     uint32_t header_pos = 0;
@@ -82,6 +87,8 @@ struct BrowserOtaState {
 
 BrowserOtaState g_ota;
 uint8_t g_workarea[4 * 1024] __attribute__((aligned(4)));
+
+void reset_parser_for_next_frame();
 
 uint32_t rd32(const uint8_t *p) {
     return static_cast<uint32_t>(p[0]) |
@@ -184,6 +191,33 @@ void fail_update(int code, const char *message) {
     g_ota.active = false;
     g_ota.metadata_ready = false;
     g_ota.complete = false;
+}
+
+void ota_led_tick(void) {
+    if (!g_ota.active) {
+        return;
+    }
+
+    const uint64_t now = time_us_64();
+    if (g_ota.led_last_toggle_us == 0 || (now - g_ota.led_last_toggle_us) >= kOtaLedBlinkPeriodUs) {
+        g_ota.led_last_toggle_us = now;
+        g_ota.led_state = !g_ota.led_state;
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, g_ota.led_state);
+    }
+}
+
+void leave_ota_mode(void) {
+    reset_parser_for_next_frame();
+    g_ota.active = false;
+    g_ota.metadata_ready = false;
+    g_ota.complete = false;
+    g_ota.reboot_pending = false;
+    g_ota.usb_reenum_pending = false;
+    g_ota.usb_reconnect_pending = false;
+    g_ota.led_state = false;
+    g_ota.led_last_toggle_us = 0;
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
+    tud_disconnect();
 }
 
 enum class RunningSlot {
@@ -333,6 +367,10 @@ void process_frame(uint8_t type, uint32_t seq, const uint8_t *payload, uint32_t 
         send_status(g_ota.active ? "active" : "idle");
         return;
     }
+    if (type == FRAME_EXIT_OTA) {
+        leave_ota_mode();
+        return;
+    }
     if (type == FRAME_ABORT) {
         fail_update(-1, "host aborted update");
         return;
@@ -460,6 +498,8 @@ bool ota_firmware_enter(void) {
 }
 
 void ota_firmware_loop(void) {
+    ota_led_tick();
+
     if (g_ota.usb_reenum_pending && absolute_time_diff_us(get_absolute_time(), g_ota.usb_reenum_at) <= 0) {
         g_ota.usb_reenum_pending = false;
         g_ota.usb_reconnect_pending = true;
@@ -554,7 +594,8 @@ void ota_firmware_hid_report_received(uint8_t report_id, uint8_t const *buffer, 
         if (type == FRAME_QUERY ||
             type == FRAME_START ||
             type == FRAME_END ||
-            type == FRAME_ABORT) {
+            type == FRAME_ABORT ||
+            type == FRAME_EXIT_OTA) {
             reset_parser_for_next_frame();
             process_frame(type, seq, nullptr, 0);
             reset_parser_for_next_frame();
