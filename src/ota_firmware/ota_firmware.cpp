@@ -53,8 +53,10 @@ struct BrowserOtaState {
     bool complete = false;
     bool reboot_pending = false;
     bool usb_reenum_pending = false;
+    bool usb_reconnect_pending = false;
     absolute_time_t reboot_at{};
     absolute_time_t usb_reenum_at{};
+    absolute_time_t usb_reconnect_at{};
 
     uint8_t header[kHeaderSize]{};
     uint32_t header_pos = 0;
@@ -443,18 +445,29 @@ bool ota_firmware_enter(void) {
     g_ota.active = true;
     g_ota.highest_erased_sector = 0xffffffffu;
     reset_parser_for_next_frame();
-    bt_disconnect();
     send_status("enter", "\"protocol\":\"ds5-browser-ota-hid-v1\",\"magic\":\"DS5O\"");
+
+    // 进入 OTA 后描述符会从 DualSense 音频+HID 切换为单一 OTA HID（PID 0x0DF4）。
+    // 不能只在稍后执行一个很短的 disconnect/connect：Windows/WebHID 对同一个物理端口和
+    // 已打开的 HID 句柄缓存很激进，150ms 的断开经常不会被浏览器观察为新设备。
+    // 因此先立即拉低 D+，再用非阻塞定时器延迟重新连接，确保主机重新读取设备/配置/HID 描述符。
+    tud_disconnect();
     g_ota.usb_reenum_pending = true;
-    g_ota.usb_reenum_at = make_timeout_time_ms(250);
+    g_ota.usb_reenum_at = make_timeout_time_ms(1200);
+
+    bt_disconnect();
     return true;
 }
 
 void ota_firmware_loop(void) {
     if (g_ota.usb_reenum_pending && absolute_time_diff_us(get_absolute_time(), g_ota.usb_reenum_at) <= 0) {
         g_ota.usb_reenum_pending = false;
-        tud_disconnect();
-        sleep_ms(150);
+        g_ota.usb_reconnect_pending = true;
+        g_ota.usb_reconnect_at = make_timeout_time_ms(50);
+    }
+
+    if (g_ota.usb_reconnect_pending && absolute_time_diff_us(get_absolute_time(), g_ota.usb_reconnect_at) <= 0) {
+        g_ota.usb_reconnect_pending = false;
         tud_connect();
     }
 
